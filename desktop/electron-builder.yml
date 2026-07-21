@@ -1,0 +1,15 @@
+appId: com.yasuo.piweb
+productName: Pi Web
+directories:
+  output: dist
+files:
+  - main/**/*
+  - preload.js
+  - assets/**/*
+  - package.json
+mac:
+  category: public.app-category.developer-tools
+  icon: assets/icon.icns
+  target: dir
+  identity: "Apple Development: jingzhou.mao@openverse.io (Y564VV8JSX)"
+asar: true

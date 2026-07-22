@@ -17,7 +17,7 @@ class AppTray {
     }
     image = image.resize({ width: 18, height: 18 });
     this.tray = new Tray(image);
-    this.tray.setToolTip("Pi Web");
+    this.tray.setToolTip("Yasuo Agent");
     this.tray.on("click", () => this.onToggleWindow());
     this.rebuildMenu();
   }
@@ -32,7 +32,7 @@ class AppTray {
     if (!this.tray) return;
     const launchAtLogin = app.getLoginItemSettings().openAtLogin;
     const menu = Menu.buildFromTemplate([
-      { label: "显示 / 隐藏 Pi Web", click: () => this.onToggleWindow() },
+      { label: "显示 / 隐藏 Yasuo Agent", click: () => this.onToggleWindow() },
       { label: `运行中的会话：${this.runningCount}`, enabled: false },
       { type: "separator" },
       {
@@ -42,7 +42,7 @@ class AppTray {
         click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
       },
       { type: "separator" },
-      { label: "退出 Pi Web", click: () => this.onQuit() },
+      { label: "退出 Yasuo Agent", click: () => this.onQuit() },
     ]);
     this.tray.setContextMenu(menu);
   }

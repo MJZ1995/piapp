@@ -159,8 +159,8 @@ if (!gotLock) {
         const focused = w && w.isVisible() && w.isFocused();
         if (focused) return; // 用户正盯着窗口，不打扰
         notifySessionFinished({
-          title: "Pi 回复完成",
-          body: "点击查看会话",
+          title: "Yasuo Agent",
+          body: "回复完成，点击查看会话",
           onClick: () => {
             if (!win.showMainWindow()) createWindowIfReady();
             const w2 = win.getMainWindow();

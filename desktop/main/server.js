@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Electron 主进程使用 CommonJS */
 "use strict";
 
 const { spawn, spawnSync } = require("child_process");

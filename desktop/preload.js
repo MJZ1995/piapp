@@ -1,9 +1,9 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Electron 主进程使用 CommonJS */
 "use strict";
 
-const { contextBridge } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
 
-// 预留桌面能力桥（当前仅标识运行环境，后续可扩展：
-// 在 Finder 中显示文件、原生通知测试等，全部走 [desktop] 提交，不碰上游）
+// 桌面能力桥（pi-web 前端通过 window.piDesktop 调用，见 SessionSidebar.tsx）
 contextBridge.exposeInMainWorld("piDesktop", {
   isDesktop: true,
   platform: process.platform,
@@ -11,4 +11,6 @@ contextBridge.exposeInMainWorld("piDesktop", {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
   },
+  // 原生目录选择器（Custom path… 入口）
+  selectDirectory: () => ipcRenderer.invoke("pi-desktop:select-directory"),
 });

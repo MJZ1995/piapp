@@ -1,9 +1,13 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Electron 主进程使用 CommonJS */
 "use strict";
 
 const path = require("path");
 const { app, BrowserWindow, shell } = require("electron");
 
-let mainWindow = null;
+// 多窗口管理：所有窗口共享同一个 pi-web 后端服务，关窗不会中断 agent 任务
+const windows = new Set();
+let lastFocused = null;
+let currentPort = null;
 
 // 服务就绪前的启动页（首次运行等待系统权限授权时给用户明确指引）
 const LOADING_HTML = `data:text/html;charset=utf-8,${encodeURIComponent(`<!DOCTYPE html>
@@ -21,9 +25,36 @@ function isOurUrl(u, port) {
   return u.startsWith(`http://127.0.0.1:${port}`) || u.startsWith(`http://localhost:${port}`);
 }
 
-// url 为空时显示启动页
-function createMainWindow({ url, port }) {
-  const win = new BrowserWindow({
+function trackWindow(w) {
+  if (windows.has(w)) return;
+  windows.add(w);
+  w.on("focus", () => { lastFocused = w; });
+  w.on("closed", () => {
+    windows.delete(w);
+    if (lastFocused === w) lastFocused = null;
+  });
+}
+
+// 外部链接交给系统浏览器；本服务链接允许开新窗口
+function applyOpenHandler(w) {
+  w.webContents.setWindowOpenHandler(({ url: u }) => {
+    if (currentPort && isOurUrl(u, currentPort)) return { action: "allow" };
+    shell.openExternal(u);
+    return { action: "deny" };
+  });
+}
+
+// 渲染进程 window.open 创建的窗口不经过 createWindow，统一纳管（独立 DevTools 窗口除外）
+app.on("browser-window-created", (_e, w) => {
+  if (w.webContents.getType() !== "window") return;
+  trackWindow(w);
+  applyOpenHandler(w);
+});
+
+// url 为空时显示启动页；__loading 标记用于服务就绪后统一加载真实地址
+function createWindow({ url, port } = {}) {
+  if (port) currentPort = port;
+  const w = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 960,
@@ -37,50 +68,70 @@ function createMainWindow({ url, port }) {
       spellcheck: false,
     },
   });
-  mainWindow = win;
-
-  // 外部链接交给系统浏览器；本服务链接允许开新窗口
-  win.webContents.setWindowOpenHandler(({ url: u }) => {
-    if (isOurUrl(u, port)) return { action: "allow" };
-    shell.openExternal(u);
-    return { action: "deny" };
-  });
-
-  // 关闭 = 隐藏（agent 长跑任务不中断）；Cmd+Q 才真正退出
-  win.on("close", (e) => {
-    if (!app.isQuitting) {
-      e.preventDefault();
-      win.hide();
-    }
-  });
-  win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
-
-  win.loadURL(url || LOADING_HTML);
-  return win;
+  trackWindow(w);
+  applyOpenHandler(w);
+  w.__loading = !url;
+  w.loadURL(url || LOADING_HTML);
+  return w;
 }
 
-function showMainWindow() {
-  if (!mainWindow) return false;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+function getAllWindows() {
+  return [...windows];
+}
+
+function getWindowCount() {
+  return windows.size;
+}
+
+// 当前聚焦窗口；无聚焦时回退到最近聚焦的窗口（供目录选择器、通知跳转挂载）
+function getFocusedWindow() {
+  const w = BrowserWindow.getFocusedWindow();
+  if (w && windows.has(w)) return w;
+  if (lastFocused && !lastFocused.isDestroyed()) return lastFocused;
+  return [...windows][0] || null;
+}
+
+// 是否有我们的窗口正处于聚焦状态（用于通知的"用户正盯着就不打扰"判断）
+function anyWindowFocused() {
+  const w = BrowserWindow.getFocusedWindow();
+  return !!w && windows.has(w);
+}
+
+function showAllWindows() {
+  if (windows.size === 0) return false;
+  for (const w of windows) {
+    if (w.isMinimized()) w.restore();
+    w.show();
+  }
+  const f = getFocusedWindow();
+  if (f) f.focus();
   return true;
 }
 
-function hideMainWindow() {
-  if (mainWindow) mainWindow.hide();
+function hideAllWindows() {
+  for (const w of windows) w.hide();
+}
+
+function anyWindowVisible() {
+  for (const w of windows) if (w.isVisible()) return true;
+  return false;
 }
 
 // 返回 'need-create' 表示没有窗口，调用方应重建
-function toggleMainWindow() {
-  if (!mainWindow) return "need-create";
-  if (mainWindow.isVisible() && mainWindow.isFocused()) hideMainWindow();
-  else showMainWindow();
+function toggleAllWindows() {
+  if (windows.size === 0) return "need-create";
+  if (anyWindowVisible()) hideAllWindows();
+  else showAllWindows();
   return "toggled";
 }
 
-function getMainWindow() {
-  return mainWindow;
-}
-
-module.exports = { createMainWindow, showMainWindow, hideMainWindow, toggleMainWindow, getMainWindow };
+module.exports = {
+  createWindow,
+  getAllWindows,
+  getWindowCount,
+  getFocusedWindow,
+  anyWindowFocused,
+  showAllWindows,
+  hideAllWindows,
+  toggleAllWindows,
+};

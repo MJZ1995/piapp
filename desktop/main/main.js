@@ -1,12 +1,14 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Electron 主进程使用 CommonJS */
 "use strict";
 
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { app, dialog, nativeImage } = require("electron");
+const { app, dialog, ipcMain, nativeImage } = require("electron");
 const { Config, isValidRepo } = require("./config");
 const server = require("./server");
 const win = require("./window");
+const { installAppMenu } = require("./menu");
 const { AppTray } = require("./tray");
 const { registerToggleShortcut, unregisterAll } = require("./shortcut");
 const { RunningWatcher, notifySessionFinished } = require("./notify");
@@ -30,8 +32,6 @@ const log = (...a) => {
 process.on("uncaughtException", (e) => log("uncaughtException:", e && e.stack || e));
 process.on("unhandledRejection", (e) => log("unhandledRejection:", e && e.stack || e));
 
-app.isQuitting = false;
-
 let serverHandle = null;
 let watcher = null;
 let tray = null;
@@ -39,19 +39,27 @@ let cfg = null;
 
 function createWindowIfReady() {
   if (!serverHandle) return;
-  if (win.getMainWindow()) {
-    win.showMainWindow();
+  if (win.getWindowCount() > 0) {
+    win.showAllWindows();
     return;
   }
-  win.createMainWindow({ url: `http://127.0.0.1:${serverHandle.port}`, port: serverHandle.port });
+  win.createWindow({ url: `http://127.0.0.1:${serverHandle.port}`, port: serverHandle.port });
+}
+
+// File > New Window（⌘N）：并行多个项目；服务未就绪时先给启动页窗口
+function newWindow() {
+  if (serverHandle) {
+    win.createWindow({ url: `http://127.0.0.1:${serverHandle.port}`, port: serverHandle.port });
+  } else {
+    win.createWindow({ url: null });
+  }
 }
 
 function toggleWindow() {
-  if (win.toggleMainWindow() === "need-create") createWindowIfReady();
+  if (win.toggleAllWindows() === "need-create") createWindowIfReady();
 }
 
 function quitApp() {
-  app.isQuitting = true;
   app.quit();
 }
 
@@ -89,7 +97,7 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (!win.showMainWindow()) createWindowIfReady();
+    if (!win.showAllWindows()) createWindowIfReady();
   });
 
   app.whenReady().then(async () => {
@@ -102,6 +110,9 @@ if (!gotLock) {
 
     cfg = new Config(app, log);
     log("config:", JSON.stringify({ file: cfg.file, port: cfg.port, shortcut: cfg.shortcut, nodePath: cfg.nodePath, repoPath: cfg.repoPath }));
+
+    // 应用菜单（File > New Window ⌘N）
+    installAppMenu({ onNewWindow: newWindow });
 
     // 仓库目录：config.json → 默认候选 → 首次启动弹框选择
     if (!cfg.repoPath) {
@@ -131,15 +142,40 @@ if (!gotLock) {
     log("node:", nodePath);
 
     // 先开启动页窗口：首次运行等待系统授权期间用户有明确反馈
-    win.createMainWindow({ url: null, port: cfg.port });
+    win.createWindow({ url: null, port: cfg.port });
+
+    // 原生目录选择器（供 pi-web 的 Custom path… 调用）
+    ipcMain.handle("pi-desktop:select-directory", async () => {
+      const w = win.getFocusedWindow();
+      const opts = {
+        title: "选择项目文件夹",
+        buttonLabel: "选择",
+        properties: ["openDirectory", "createDirectory"],
+      };
+      const r = w
+        ? await dialog.showOpenDialog(w, opts)
+        : await dialog.showOpenDialog(opts);
+      return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
+    });
 
     serverHandle = await startServerWithRetry(cfg, nodePath);
     if (!serverHandle) return; // 用户选择退出
     log(`服务就绪：mode=${serverHandle.mode} port=${serverHandle.port}`);
 
-    const w = win.getMainWindow();
-    if (w) w.loadURL(`http://127.0.0.1:${serverHandle.port}`);
-    else win.createMainWindow({ url: `http://127.0.0.1:${serverHandle.port}`, port: serverHandle.port });
+    // 服务就绪：把所有启动页窗口切到真实地址；没有窗口则新建
+    const serverUrl = `http://127.0.0.1:${serverHandle.port}`;
+    const all = win.getAllWindows();
+    const loading = all.filter((w) => w.__loading);
+    if (loading.length > 0) {
+      for (const w of loading) {
+        w.__loading = false;
+        w.loadURL(serverUrl);
+      }
+    } else if (all.length > 0) {
+      all[0].loadURL(serverUrl);
+    } else {
+      win.createWindow({ url: serverUrl, port: serverHandle.port });
+    }
 
     tray = new AppTray({
       iconPath: path.join(__dirname, "..", "assets", "tray.png"),
@@ -155,16 +191,15 @@ if (!gotLock) {
       log,
       onChange: (count) => { if (tray) tray.setRunningCount(count); },
       onSessionFinished: (sessionId) => {
-        const w = win.getMainWindow();
-        const focused = w && w.isVisible() && w.isFocused();
-        if (focused) return; // 用户正盯着窗口，不打扰
+        if (win.anyWindowFocused()) return; // 用户正盯着窗口，不打扰
         notifySessionFinished({
           title: "Yasuo Agent",
           body: "回复完成，点击查看会话",
           onClick: () => {
-            if (!win.showMainWindow()) createWindowIfReady();
-            const w2 = win.getMainWindow();
+            if (!win.showAllWindows()) createWindowIfReady();
+            const w2 = win.getFocusedWindow();
             if (w2) {
+              w2.__loading = false;
               w2.loadURL(`http://127.0.0.1:${serverHandle.port}/?session=${encodeURIComponent(sessionId)}`);
             }
           },
@@ -174,7 +209,7 @@ if (!gotLock) {
     watcher.start();
 
     app.on("activate", () => {
-      if (!win.showMainWindow()) createWindowIfReady();
+      if (!win.showAllWindows()) createWindowIfReady();
     });
   });
 
@@ -182,7 +217,6 @@ if (!gotLock) {
   app.on("window-all-closed", () => {});
 
   app.on("before-quit", () => {
-    app.isQuitting = true;
     if (watcher) watcher.stop();
     server.stopServer(serverHandle, log);
   });

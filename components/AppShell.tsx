@@ -186,7 +186,7 @@ export function AppShell() {
   // Update browser tab title when workspace changes
   useEffect(() => {
     const name = activeCwd ? getFileName(activeCwd) || activeCwd : null;
-    document.title = name ? `${name} — Pi Agent Web` : "Pi Agent Web";
+    document.title = name ? `${name} — Yasuo Agent` : "Yasuo Agent";
   }, [activeCwd]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {

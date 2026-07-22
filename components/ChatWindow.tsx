@@ -417,6 +417,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               }}
             >
               <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0, flex: 1, lineHeight: 1.4, overflow: "hidden" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- 36px 本地头像，无需 next/image 优化 */}
                 <img src="/avatar.png" alt="" style={{ width: 36, height: 36, borderRadius: 9, flexShrink: 0, alignSelf: "center" }} />
                 <span style={{ fontSize: 22, color: "var(--text)", fontWeight: 700, letterSpacing: 0, flexShrink: 0, whiteSpace: "nowrap" }}>Yasuo Agent</span>
               </div>

@@ -102,7 +102,7 @@ function probe(port, timeoutMs = 2000) {
       res.setEncoding("utf8");
       res.on("data", (c) => { if (body.length < 128 * 1024) body += c; });
       res.on("end", () =>
-        finish(res.statusCode === 200 && body.includes("Pi Agent Web") ? "pi-web" : "other")
+        finish(res.statusCode === 200 && (body.includes("Yasuo Agent") || body.includes("Pi Agent Web")) ? "pi-web" : "other")
       );
       res.on("error", () => finish("other"));
     });

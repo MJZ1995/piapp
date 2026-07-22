@@ -9,7 +9,7 @@ let mainWindow = null;
 const LOADING_HTML = `data:text/html;charset=utf-8,${encodeURIComponent(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Pi Web</title></head>
 <body style="margin:0;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#1e1e1e;color:#ccc;font-family:-apple-system,'PingFang SC',sans-serif;user-select:none">
-  <div style="font-size:22px;font-weight:600;margin-bottom:16px">Pi Web</div>
+  <div style="font-size:22px;font-weight:600;margin-bottom:16px">Yasuo Agent</div>
   <div style="font-size:13px;color:#999">正在启动本地服务…</div>
   <div style="font-size:12px;color:#777;margin-top:28px;max-width:360px;text-align:center;line-height:2">
     首次运行如看到系统弹窗「"Pi Web"想访问"桌面"文件夹中的文件」<br>

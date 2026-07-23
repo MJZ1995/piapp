@@ -113,4 +113,4 @@ function notifySessionFinished({ title, body, onClick }) {
   n.show();
 }
 
-module.exports = { RunningWatcher, notifySessionFinished };
+module.exports = { RunningWatcher, notifySessionFinished, playFinishSound };

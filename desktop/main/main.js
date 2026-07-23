@@ -11,7 +11,7 @@ const win = require("./window");
 const { installAppMenu } = require("./menu");
 const { AppTray } = require("./tray");
 const { registerToggleShortcut, unregisterAll } = require("./shortcut");
-const { RunningWatcher, notifySessionFinished } = require("./notify");
+const { RunningWatcher, notifySessionFinished, playFinishSound } = require("./notify");
 
 // 打包后 stdout 不可见，日志同时写文件：~/Library/Application Support/pi-web-desktop/desktop.log
 let logFile = null;
@@ -191,7 +191,8 @@ if (!gotLock) {
       log,
       onChange: (count) => { if (tray) tray.setRunningCount(count); },
       onSessionFinished: (sessionId) => {
-        if (win.anyWindowFocused()) return; // 用户正盯着窗口，不打扰
+        playFinishSound(); // 音效每次完成都播（彩蛋）；系统通知仅在窗口未聚焦时弹
+        if (win.anyWindowFocused()) return;
         notifySessionFinished({
           title: "Yasuo Agent",
           body: "回复完成，点击查看会话",

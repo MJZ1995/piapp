@@ -11,7 +11,7 @@ const notoSansMono = Noto_Sans_Mono({
 
 export const metadata: Metadata = {
   title: "Yasuo Agent",
-  description: "Pi Coding Agent Web Interface",
+  description: "Yasuo Agent — interface for the pi coding agent",
 };
 
 export default function RootLayout({

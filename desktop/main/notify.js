@@ -8,7 +8,7 @@ const { Notification } = require("electron");
 
 // 完成提示音：macOS 自带 afplay 播放，零依赖。
 // asar 打包后外部进程读不到包内文件，故该文件在 electron-builder.yml 里 asarUnpack。
-const SOUND_PATH = path.join(__dirname, "..", "assets", "hasagi.mp4")
+const SOUND_PATH = path.join(__dirname, "..", "assets", "hasagi.m4a")
   .replace("app.asar", "app.asar.unpacked");
 
 function playFinishSound() {

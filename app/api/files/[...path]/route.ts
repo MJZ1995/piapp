@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import {
   getAllowedFileRoots,
+  inspectDeleteTarget,
   isFilePathAllowed,
   isWindowsAbsolutePath,
   normalizeSlashes,
@@ -211,6 +212,25 @@ export async function POST(
       { uploaded, skipped, errors },
       { status: errors.length > 0 ? 207 : 200 },
     );
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  try {
+    const { path: segments } = await params;
+    const filePath = filePathFromSegments(segments);
+    const inspection = inspectDeleteTarget(filePath, await getAllowedFileRoots());
+    if (!inspection.ok) {
+      return NextResponse.json({ error: inspection.error }, { status: inspection.status });
+    }
+
+    fs.rmSync(filePath, { recursive: inspection.isDirectory });
+    return NextResponse.json({ deleted: filePath });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }

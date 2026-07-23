@@ -34,6 +34,7 @@ interface Props {
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   onAtMentions?: (relativePaths: string[]) => void;
   onUploadBusyChange?: (busy: boolean) => void;
+  onDeleted?: (fullPath: string, isDir: boolean) => void;
 }
 
 export interface FileExplorerHandle {
@@ -187,6 +188,7 @@ function TreeNode({
   cwd,
   onOpenFile,
   onAtMention,
+  onDelete,
   expandedPaths,
   onToggleExpanded,
   refreshToken,
@@ -199,6 +201,7 @@ function TreeNode({
   cwd: string;
   onOpenFile: (filePath: string, fileName: string) => void;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
+  onDelete: (node: FileNode) => Promise<void>;
   expandedPaths: Set<string>;
   onToggleExpanded: (fullPath: string, open: boolean) => void;
   refreshToken: string;
@@ -217,6 +220,7 @@ function TreeNode({
   const [loaded, setLoaded] = useState(node.loaded ?? false);
   const [loading, setLoading] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadChildren = useCallback(async (force = false) => {
     if (loaded && !force) return;
@@ -347,7 +351,7 @@ function TreeNode({
             title="Insert path into chat"
             style={{
               position: "absolute",
-              right: !node.isDir ? 28 : 4,
+              right: !node.isDir ? 52 : 28,
               top: "50%",
               transform: "translateY(-50%)",
               display: "flex",
@@ -378,7 +382,7 @@ function TreeNode({
             title="Download file"
             style={{
               position: "absolute",
-              right: 4,
+              right: 28,
               top: "50%",
               transform: "translateY(-50%)",
               display: "flex",
@@ -405,6 +409,47 @@ function TreeNode({
             </svg>
           </a>
         )}
+        {hovered && (
+          <button
+            type="button"
+            disabled={deleting}
+            onClick={async (event) => {
+              event.stopPropagation();
+              setDeleting(true);
+              try {
+                await onDelete(node);
+              } finally {
+                setDeleting(false);
+              }
+            }}
+            title={node.isDir ? "删除文件夹" : "删除文件"}
+            aria-label={node.isDir ? `删除文件夹 ${node.name}` : `删除文件 ${node.name}`}
+            style={{
+              position: "absolute",
+              right: 4,
+              top: "50%",
+              transform: "translateY(-50%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 20,
+              height: 20,
+              padding: 0,
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border)",
+              borderRadius: 4,
+              color: deleting ? "var(--text-dim)" : "#f87171",
+              cursor: deleting ? "default" : "pointer",
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 6h18" />
+              <path d="M8 6V4h8v2" />
+              <path d="m19 6-1 14H6L5 6" />
+              <path d="M10 11v5M14 11v5" />
+            </svg>
+          </button>
+        )}
       </div>
       {node.isDir && open && (
         <div>
@@ -416,6 +461,7 @@ function TreeNode({
               cwd={cwd}
               onOpenFile={onOpenFile}
               onAtMention={onAtMention}
+              onDelete={onDelete}
               expandedPaths={expandedPaths}
               onToggleExpanded={onToggleExpanded}
               refreshToken={refreshToken}
@@ -442,6 +488,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   onAtMention,
   onAtMentions,
   onUploadBusyChange,
+  onDeleted,
 }, ref) {
   const [roots, setRoots] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -487,6 +534,28 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       return next;
     });
   }, []);
+
+  const handleDelete = useCallback(async (node: FileNode) => {
+    const kind = node.isDir ? "文件夹" : "文件";
+    if (!window.confirm(`确定删除${kind}“${node.name}”吗？${node.isDir ? "\n文件夹内的所有内容都会被永久删除。" : ""}`)) return;
+
+    const response = await fetch(`/api/files/${encodeFilePathForApi(node.fullPath)}`, { method: "DELETE" });
+    const data = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) {
+      window.alert(data.error ?? `删除失败（HTTP ${response.status}）`);
+      return;
+    }
+
+    const normalizedTarget = normalizeFilePathSlashes(node.fullPath).replace(/\/$/, "");
+    const wasDeleted = (candidate: string) => {
+      const normalized = normalizeFilePathSlashes(candidate);
+      return normalized === normalizedTarget || (node.isDir && normalized.startsWith(`${normalizedTarget}/`));
+    };
+    setExpandedPaths((paths) => new Set([...paths].filter((item) => !wasDeleted(item))));
+    setHighlightedPaths((paths) => new Set([...paths].filter((item) => !wasDeleted(item))));
+    onDeleted?.(node.fullPath, node.isDir);
+    setTreeRefreshKey((key) => key + 1);
+  }, [onDeleted]);
 
   const applyUploadResult = useCallback((data: UploadResponse) => {
     const uploaded = data.uploaded ?? [];
@@ -766,6 +835,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               cwd={cwd}
               onOpenFile={onOpenFile}
               onAtMention={onAtMention}
+              onDelete={handleDelete}
               expandedPaths={expandedPaths}
               onToggleExpanded={handleToggleExpanded}
               refreshToken={refreshToken}

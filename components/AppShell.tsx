@@ -14,7 +14,7 @@ import { BranchNavigator } from "./BranchNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { copyText } from "@/lib/clipboard";
-import { getFileName } from "@/lib/file-paths";
+import { getFileName, normalizeFilePathSlashes } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
 import { getInitialNavigation } from "@/lib/initial-navigation";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
@@ -403,6 +403,26 @@ export function AppShell() {
     });
   }, [fileTabs]);
 
+  const handleFileDeleted = useCallback((filePath: string, isDir: boolean) => {
+    const target = normalizeFilePathSlashes(filePath).replace(/\/$/, "");
+    const matches = (tab: Tab) => {
+      const candidate = normalizeFilePathSlashes(tab.filePath);
+      return candidate === target || (isDir && candidate.startsWith(`${target}/`));
+    };
+
+    setFileTabs((tabs) => {
+      const remaining = tabs.filter((tab) => !matches(tab));
+      if (remaining.length === tabs.length) return tabs;
+      if (remaining.length === 0) setRightPanelOpen(false);
+      setActiveFileTabId((current) => (
+        current && remaining.some((tab) => tab.id === current)
+          ? current
+          : remaining[remaining.length - 1]?.id ?? null
+      ));
+      return remaining;
+    });
+  }, []);
+
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
     window.open(
@@ -447,6 +467,7 @@ export function AppShell() {
         selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
         onCwdChange={handleCwdChange}
         onOpenFile={handleOpenFile}
+        onFileDeleted={handleFileDeleted}
         explorerRefreshKey={explorerRefreshKey}
         onExplorerRefresh={handleExplorerRefresh}
         onAtMention={handleAtMention}

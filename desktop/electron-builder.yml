@@ -13,3 +13,5 @@ mac:
   target: dir
   identity: "Apple Development: jingzhou.mao@openverse.io (Y564VV8JSX)"
 asar: true
+asarUnpack:
+  - assets/hasagi.mp4

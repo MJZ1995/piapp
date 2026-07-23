@@ -2,7 +2,18 @@
 "use strict";
 
 const http = require("http");
+const path = require("path");
+const { spawn } = require("child_process");
 const { Notification } = require("electron");
+
+// 完成提示音：macOS 自带 afplay 播放，零依赖。
+// asar 打包后外部进程读不到包内文件，故该文件在 electron-builder.yml 里 asarUnpack。
+const SOUND_PATH = path.join(__dirname, "..", "assets", "hasagi.mp4")
+  .replace("app.asar", "app.asar.unpacked");
+
+function playFinishSound() {
+  try { spawn("afplay", [SOUND_PATH], { stdio: "ignore", detached: true }).unref(); } catch { /* 播放失败不影响通知 */ }
+}
 
 // 订阅 pi-web 自带的 /api/agent/running/events（SSE），
 // 当某个会话 id 从"运行中"集合消失时触发 onSessionFinished。
@@ -96,7 +107,8 @@ class RunningWatcher {
 
 function notifySessionFinished({ title, body, onClick }) {
   if (!Notification.isSupported()) return;
-  const n = new Notification({ title, body, silent: false });
+  playFinishSound();
+  const n = new Notification({ title, body, silent: true });
   if (onClick) n.on("click", onClick);
   n.show();
 }

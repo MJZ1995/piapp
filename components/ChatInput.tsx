@@ -56,6 +56,9 @@ interface Props {
   soundEnabled?: boolean;
   onSoundToggle?: () => void;
   onAudioUnlock?: () => void;
+  terminalAvailable?: boolean;
+  terminalOpen?: boolean;
+  onTerminalToggle?: () => void;
   draftKey?: string;
   /** Session working directory — enables the @ file autocomplete menu */
   cwd?: string | null;
@@ -197,6 +200,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   slashCommands, slashCommandsLoading, onLoadSlashCommands,
   onBuiltinCommand,
   soundEnabled, onSoundToggle, onAudioUnlock,
+  terminalAvailable, terminalOpen, onTerminalToggle,
   onPromptWithStreamingBehavior,
   draftKey,
   cwd,
@@ -1631,6 +1635,43 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 backdropFilter: "blur(10px)",
               } : null),
             }}>
+            {terminalAvailable && onTerminalToggle && (
+              <button
+                type="button"
+                onClick={onTerminalToggle}
+                title={`${terminalOpen ? "收起" : "展开"}终端（⌘J）`}
+                aria-label={terminalOpen ? "收起终端" : "展开终端"}
+                aria-pressed={terminalOpen}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                  padding: isMobile ? "0 6px" : "8px 12px",
+                  width: isMobile ? "auto" : undefined,
+                  height: 32,
+                  background: terminalOpen ? "var(--bg-hover)" : "none",
+                  border: "none",
+                  borderRadius: 9,
+                  color: terminalOpen ? "var(--text)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  transition: "background 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.background = "var(--bg-hover)";
+                  event.currentTarget.style.color = "var(--text)";
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.background = terminalOpen ? "var(--bg-hover)" : "none";
+                  event.currentTarget.style.color = terminalOpen ? "var(--text)" : "var(--text-muted)";
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <polyline points="7 9 10 12 7 15" />
+                  <line x1="13" y1="15" x2="17" y2="15" />
+                </svg>
+                {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>Terminal</span>}
+              </button>
+            )}
             {!isStreaming && onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} style={{ position: "relative" }}>
                 <button

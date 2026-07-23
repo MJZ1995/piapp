@@ -17,6 +17,9 @@ import type { TerminalInfo } from "@/lib/terminal-manager";
 interface Props {
   cwd: string | null;
   isDark: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onEnabledChange: (enabled: boolean) => void;
 }
 
 interface TerminalViewHandle {
@@ -227,10 +230,9 @@ const TerminalView = forwardRef<TerminalViewHandle, {
   return <div ref={containerRef} style={{ width: "100%", height: "100%", padding: "6px 8px", background: "var(--bg)", overflow: "hidden" }} />;
 });
 
-export function TerminalPanel({ cwd, isDark }: Props) {
+export function TerminalPanel({ cwd, isDark, open, onOpenChange, onEnabledChange }: Props) {
   const [enabled, setEnabled] = useState(false);
   const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
-  const [open, setOpen] = useState(false);
   const [maximized, setMaximized] = useState(false);
   const [height, setHeight] = useState(300);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -245,31 +247,39 @@ export function TerminalPanel({ cwd, isDark }: Props) {
       const response = await fetch(`/api/terminals?cwd=${encodeURIComponent(cwd)}`, { cache: "no-store" });
       const data = await response.json() as { enabled?: boolean; terminals?: TerminalInfo[]; error?: string };
       if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
-      setEnabled(data.enabled === true);
+      const available = data.enabled === true;
+      setEnabled(available);
+      onEnabledChange(available);
       setTerminals(data.terminals ?? []);
     } catch {
       setEnabled(false);
+      onEnabledChange(false);
       setTerminals([]);
     }
-  }, [cwd]);
+  }, [cwd, onEnabledChange]);
 
   useEffect(() => {
+    if (!cwd) {
+      setEnabled(false);
+      onEnabledChange(false);
+      setTerminals([]);
+      return;
+    }
     void refresh();
-    if (!cwd) return;
     const timer = setInterval(() => void refresh(), 2000);
     return () => clearInterval(timer);
-  }, [cwd, refresh]);
+  }, [cwd, onEnabledChange, refresh]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.metaKey && event.key.toLowerCase() === "j") {
+      if (enabled && event.metaKey && event.key.toLowerCase() === "j") {
         event.preventDefault();
-        setOpen((value) => !value);
+        onOpenChange(!open);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [enabled, onOpenChange, open]);
 
   const active = useMemo(
     () => terminals.find((terminal) => terminal.active) ?? terminals[0] ?? null,
@@ -287,12 +297,12 @@ export function TerminalPanel({ cwd, isDark }: Props) {
     if (!cwd) return;
     try {
       await act({ action: "create" });
-      setOpen(true);
+      onOpenChange(true);
       setMaximized(false);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     }
-  }, [act, cwd]);
+  }, [act, cwd, onOpenChange]);
 
   const close = useCallback(async (terminal: TerminalInfo) => {
     if (!cwd) return;
@@ -357,8 +367,8 @@ export function TerminalPanel({ cwd, isDark }: Props) {
     window.addEventListener("pointerup", stop);
   }, [height, maximized, open]);
 
-  if (!cwd || !enabled) return null;
-  const panelHeight = open ? (maximized ? "calc(100dvh - 36px)" : height) : 32;
+  if (!cwd || !enabled || !open) return null;
+  const panelHeight = maximized ? "calc(100dvh - 36px)" : height;
   const buttonStyle: React.CSSProperties = {
     minWidth: 26,
     height: 24,
@@ -373,11 +383,11 @@ export function TerminalPanel({ cwd, isDark }: Props) {
 
   return (
     <section style={{ position: "relative", flex: `0 0 ${typeof panelHeight === "number" ? `${panelHeight}px` : panelHeight}`, minHeight: 32, display: "flex", flexDirection: "column", overflow: "hidden", borderTop: "1px solid var(--border)", background: "var(--bg)" }}>
-      {open && !maximized && (
+      {!maximized && (
         <div onPointerDown={startResize} title="拖动调整终端高度" style={{ position: "absolute", top: -3, left: 0, right: 0, height: 6, zIndex: 4, cursor: "ns-resize" }} />
       )}
-      <header style={{ height: 32, flexShrink: 0, display: "flex", alignItems: "center", gap: 4, padding: "0 6px", background: "var(--bg-panel)", borderBottom: open ? "1px solid var(--border)" : "none" }}>
-        <button type="button" onClick={() => setOpen((value) => !value)} style={{ ...buttonStyle, display: "flex", alignItems: "center", gap: 5, fontWeight: 650, color: "var(--text)" }} title="Terminal（⌘J）" aria-label={open ? "收起终端" : "展开终端"}>
+      <header style={{ height: 32, flexShrink: 0, display: "flex", alignItems: "center", gap: 4, padding: "0 6px", background: "var(--bg-panel)", borderBottom: "1px solid var(--border)" }}>
+        <button type="button" onClick={() => onOpenChange(false)} style={{ ...buttonStyle, display: "flex", alignItems: "center", gap: 5, fontWeight: 650, color: "var(--text)" }} title="收起 Terminal（⌘J）" aria-label="收起终端">
           <span style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.12s" }}>›</span>
           Terminal
         </button>
@@ -396,7 +406,7 @@ export function TerminalPanel({ cwd, isDark }: Props) {
             >
               <button
                 type="button"
-                onClick={() => { setOpen(true); void act({ action: "activate", id: terminal.id }).catch((failure) => setError(String(failure))); }}
+                onClick={() => { onOpenChange(true); void act({ action: "activate", id: terminal.id }).catch((failure) => setError(String(failure))); }}
                 title={`${terminal.cwd}\n${terminal.trusted ? "信任 Agent" : "保护模式"}`}
                 aria-label={`切换到 ${terminal.name}`}
                 style={{
@@ -434,7 +444,7 @@ export function TerminalPanel({ cwd, isDark }: Props) {
           <button type="button" onClick={openSearch} style={buttonStyle} title="搜索 / Search（⌘F）" aria-label="搜索终端输出">⌕</button>
           <button type="button" onClick={exportOutput} style={buttonStyle} title="导出文本 / Export" aria-label="导出终端输出">⇩</button>
           <button type="button" onClick={() => void toggleTrust()} style={{ ...buttonStyle, color: active.trusted ? "var(--accent)" : "var(--text-muted)" }} title={active.trusted ? "取消信任 Agent" : "信任 Agent"} aria-label={active.trusted ? "取消信任 Agent" : "信任 Agent"}>◆</button>
-          <button type="button" onClick={() => { setOpen(true); setMaximized((value) => !value); }} style={buttonStyle} title={maximized ? "还原" : "最大化"} aria-label={maximized ? "还原终端面板" : "最大化终端面板"}>{maximized ? "↘" : "↗"}</button>
+          <button type="button" onClick={() => { onOpenChange(true); setMaximized((value) => !value); }} style={buttonStyle} title={maximized ? "还原" : "最大化"} aria-label={maximized ? "还原终端面板" : "最大化终端面板"}>{maximized ? "↘" : "↗"}</button>
         </>}
       </header>
 

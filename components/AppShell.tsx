@@ -49,6 +49,8 @@ export function AppShell() {
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [pluginsConfigOpen, setPluginsConfigOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalAvailable, setTerminalAvailable] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   // On mobile the sidebar is an overlay drawer; hide it by default so the chat
@@ -1185,6 +1187,9 @@ export function AppShell() {
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
               onOpenFile={handleOpenLinkedFile}
+              terminalAvailable={terminalAvailable}
+              terminalOpen={terminalOpen}
+              onTerminalToggle={() => setTerminalOpen((open) => !open)}
             />
           ) : initialCwdStatus === "validating" ? (
             <div
@@ -1231,6 +1236,9 @@ export function AppShell() {
         <TerminalPanel
           cwd={activeCwd ?? selectedSession?.cwd ?? newSessionCwd ?? null}
           isDark={isDark}
+          open={terminalOpen}
+          onOpenChange={setTerminalOpen}
+          onEnabledChange={setTerminalAvailable}
         />
       </div>
 

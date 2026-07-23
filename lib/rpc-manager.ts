@@ -8,6 +8,8 @@ import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./pi-types";
 import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem } from "./types";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-ui-terminal";
+import { createTerminalTools } from "./terminal-tools";
+import { terminalsEnabled } from "./terminal-manager";
 
 // ============================================================================
 // Types
@@ -1071,6 +1073,7 @@ export async function startRpcSession(
       services,
       sessionManager,
       ...(toolsOption !== undefined ? { tools: toolsOption } : {}),
+      ...(terminalsEnabled() ? { customTools: createTerminalTools() } : {}),
     });
 
     // If specific tool names were requested (non-empty), set the active tools to the

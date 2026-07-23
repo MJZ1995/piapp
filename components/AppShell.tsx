@@ -11,6 +11,7 @@ import { ModelsConfig } from "./ModelsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { BranchNavigator } from "./BranchNavigator";
+import { TerminalPanel } from "./TerminalPanel";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { copyText } from "@/lib/clipboard";
@@ -1227,6 +1228,10 @@ export function AppShell() {
             )
           ) : null}
         </div>
+        <TerminalPanel
+          cwd={activeCwd ?? selectedSession?.cwd ?? newSessionCwd ?? null}
+          isDark={isDark}
+        />
       </div>
 
       {/* Right panel: file viewer — always mounted, width animated via CSS */}

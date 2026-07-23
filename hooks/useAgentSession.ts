@@ -1274,7 +1274,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     const [, commandName, rawArgs = ""] = match;
     const args = rawArgs.trim();
-    const sid = sessionIdRef.current ?? await ensureNewSession();
     const complete = (result: BuiltinSlashCommandResult): BuiltinSlashCommandResult => {
       if (!result.handled) return result;
       if (result.error) {
@@ -1286,6 +1285,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     };
 
     try {
+      if (commandName === "terminal") {
+        const cwd = session?.cwd ?? newSessionCwd;
+        if (!cwd) return complete({ handled: true, error: "请先选择项目目录" });
+        if (!args) return complete({ handled: true, error: "用法：/terminal [终端名称] <输入内容>" });
+        const response = await fetch("/api/terminals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "command", cwd, args }),
+        });
+        const data = await response.json().catch(() => ({})) as { terminal?: { name?: string }; error?: string };
+        if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
+        return complete({ handled: true, message: `已发送到 ${data.terminal?.name ?? "当前终端"}` });
+      }
+
+      const sid = sessionIdRef.current ?? await ensureNewSession();
       switch (commandName) {
         case "compact": {
           if (!sid || isCompacting) return complete({ handled: true, error: "No active session to compact" });
@@ -1348,7 +1362,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (commandName === "compact") setIsCompacting(false);
     }
-  }, [addNotice, ensureNewSession, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, promoteNewSession, onSessionStatsPanelOpen]);
+  }, [addNotice, ensureNewSession, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, newSessionCwd, promoteNewSession, onSessionStatsPanelOpen, session?.cwd]);
 
   // Queued (undelivered) messages live in the queue panel only; the chat gets
   // the real user message when pi delivers it (user message_end event). An

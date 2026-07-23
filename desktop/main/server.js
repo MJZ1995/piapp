@@ -88,6 +88,7 @@ function buildChildEnv() {
     ...extras,
   ]);
   env.PATH = [...parts].filter(Boolean).join(":");
+  env.PI_WEB_DESKTOP = "1";
   return env;
 }
 
@@ -112,6 +113,22 @@ function probe(port, timeoutMs = 2000) {
   });
 }
 
+function probeDesktopTerminal(port, timeoutMs = 2000) {
+  return new Promise((resolve) => {
+    const req = http.get({ host: "127.0.0.1", port, path: "/api/terminals", timeout: timeoutMs }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => { if (body.length < 8192) body += chunk; });
+      res.on("end", () => {
+        try { resolve(res.statusCode === 200 && JSON.parse(body).enabled === true); }
+        catch { resolve(false); }
+      });
+    });
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+    req.on("error", () => resolve(false));
+  });
+}
+
 function findFreePort() {
   return new Promise((resolve, reject) => {
     const srv = net.createServer();
@@ -127,12 +144,12 @@ function findFreePort() {
 async function startServer({ repoPath, nodePath, env, preferredPort, log }) {
   const state = await probe(preferredPort);
   log(`probe(${preferredPort}) = ${state}`);
-  if (state === "pi-web") {
-    log(`端口 ${preferredPort} 已有 pi-web 在运行，直接附着`);
+  if (state === "pi-web" && await probeDesktopTerminal(preferredPort)) {
+    log(`端口 ${preferredPort} 已有 Yasuo Agent 桌面服务在运行，直接附着`);
     return { mode: "attached", port: preferredPort, pid: null };
   }
-  const port = state === "other" ? await findFreePort() : preferredPort;
-  if (state === "other") log(`端口 ${preferredPort} 被其他程序占用，改用 ${port}`);
+  const port = state === "free" ? preferredPort : await findFreePort();
+  if (state !== "free") log(`端口 ${preferredPort} 的服务不含桌面终端能力，改用 ${port}`);
 
   if (!fs.existsSync(path.join(repoPath, ".next"))) {
     throw new Error(`pi-web 尚未构建（缺少 .next 目录）。请在 ${repoPath} 运行 npm run build`);
@@ -140,13 +157,13 @@ async function startServer({ repoPath, nodePath, env, preferredPort, log }) {
 
   // detached: true 使子进程成为进程组组长，之后 kill(-pid) 才能连
   // next-server 孙进程一起杀掉（Phase 0 实测它会孤儿化）
-  log(`spawn: ${nodePath} bin/pi-web.js --no-open --port ${port}（cwd: ${repoPath}）`);
+  log(`spawn: ${nodePath} bin/pi-web.js --no-open --hostname 127.0.0.1 --port ${port}（cwd: ${repoPath}）`);
   // 注意：不能用 detached: true——在 LaunchServices(launchd) 上下文中，
   // detached(setsid) 的子进程会静默死亡且 SIGCHLD 丢失（实测踩坑）。
   // 因此退出时改用 ps 枚举子孙进程树逐个 kill（见 killTree）。
   const child = spawn(
     nodePath,
-    [path.join(repoPath, "bin", "pi-web.js"), "--no-open", "--port", String(port)],
+    [path.join(repoPath, "bin", "pi-web.js"), "--no-open", "--hostname", "127.0.0.1", "--port", String(port)],
     { cwd: repoPath, env, detached: false, stdio: ["ignore", "pipe", "pipe"] }
   );
   let exited = false;

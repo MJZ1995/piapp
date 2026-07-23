@@ -111,6 +111,7 @@ const BUILTIN_SLASH_COMMANDS: SlashCommandPaletteItem[] = [
   { name: "name", description: "设置会话显示名称", source: "builtin" },
   { name: "session", description: "查看会话的消息数、Token 与花费统计", source: "builtin" },
   { name: "copy", description: "复制最后一条助手回复", source: "builtin" },
+  { name: "terminal", description: "向当前或指定终端发送输入", source: "builtin" },
 ];
 
 const SLASH_SOURCES: SlashCommandSource[] = ["builtin", "extension", "prompt", "skill"];

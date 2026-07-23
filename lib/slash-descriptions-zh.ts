@@ -9,13 +9,19 @@ export const SLASH_DESCRIPTION_ZH: Record<string, string> = {
   "skill:browser-tools": "交互式浏览器自动化（Chrome DevTools Protocol）。需要操作网页、测试前端或可见浏览器交互时使用。",
   "skill:transcribe": "Apple Silicon Mac 本地语音转文字。直接支持 wav，其他音频格式经 ffmpeg 转换。",
 
-  // ─── ponytail（npm:@dietrichgebert/ponytail） ───
+  // ─── ponytail（npm:@dietrichgebert/ponytail；skill: 与命令两种形态都会出现） ───
   "skill:ponytail": "强制采用「能跑就行」的最简方案：代码最少、成本最低。资深工程师的克制人格。",
   "skill:ponytail-audit": "全仓库过度工程审计：输出该删除、该简化的排序清单。",
   "skill:ponytail-debt": "收集代码中所有 ponytail: 注释，生成技术债台账。",
   "skill:ponytail-gain": "展示 ponytail 的实测收益记分板（代码量 / 成本 / 速度）。",
   "skill:ponytail-help": "ponytail 全部模式、技能与命令的速查卡。",
   "skill:ponytail-review": "专注过度工程的代码评审：重复造轮子、多余依赖、投机性抽象。",
+  "ponytail": "强制采用「能跑就行」的最简方案：代码最少、成本最低。资深工程师的克制人格。",
+  "ponytail-audit": "全仓库过度工程审计：输出该删除、该简化的排序清单。",
+  "ponytail-debt": "收集代码中所有 ponytail: 注释，生成技术债台账。",
+  "ponytail-gain": "展示 ponytail 的实测收益记分板（代码量 / 成本 / 速度）。",
+  "ponytail-help": "ponytail 全部模式、技能与命令的速查卡。",
+  "ponytail-review": "专注过度工程的代码评审：重复造轮子、多余依赖、投机性抽象。",
 
   // ─── pi-hermes-memory 扩展命令（npm:pi-hermes-memory） ───
   "memory-consolidate": "手动触发记忆整理合并，释放存储空间。",

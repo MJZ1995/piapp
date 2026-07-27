@@ -1,6 +1,5 @@
 import { stat } from "fs/promises";
-import { readFileSync } from "fs";
-import { join, resolve } from "path";
+import { resolve } from "path";
 import { createAgentSessionServices, getAgentDir, type SettingsManager } from "@earendil-works/pi-coding-agent";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { loadModelsWithCache, withModelRuntimeError, type ModelsData } from "@/lib/models-cache";
@@ -19,49 +18,6 @@ function compareModelEntries(
     || modelNameCollator.compare(a.id, b.id);
 }
 
-const THINKING_SUFFIXES = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
-
-function stripThinkingSuffix(modelRef: string): string {
-  const trimmed = modelRef.trim();
-  const colonIndex = trimmed.lastIndexOf(":");
-  if (colonIndex === -1) return trimmed;
-  const suffix = trimmed.substring(colonIndex + 1);
-  return THINKING_SUFFIXES.has(suffix) ? trimmed.substring(0, colonIndex) : trimmed;
-}
-
-function filterByExactEnabledModels<T extends { id: string; provider: string }>(
-  available: readonly T[],
-  enabledModels: string[] | undefined,
-  declaredModels: ReadonlySet<string>,
-): readonly T[] {
-  // 用户在 Models 对话框（models.json）里显式声明的模型视为显式启用，
-  // 不被 enabledModels 白名单隐藏；白名单继续约束其他自动发现的模型。
-  const declared = available.filter((m) => declaredModels.has(`${m.provider}/${m.id}`));
-  if (!enabledModels || enabledModels.length === 0) return available;
-
-  const refs = new Set(enabledModels.map(stripThinkingSuffix).filter(Boolean));
-  const visible = available.filter((m) => refs.has(`${m.provider}/${m.id}`) || refs.has(m.id));
-  const merged = [...visible, ...declared.filter((m) => !visible.includes(m))];
-  return merged.length > 0 ? merged : available;
-}
-
-function getDeclaredModels(): Set<string> {
-  try {
-    const data = JSON.parse(readFileSync(join(getAgentDir(), "models.json"), "utf8")) as {
-      providers?: Record<string, { models?: { id?: string }[] }>;
-    };
-    const pairs = new Set<string>();
-    for (const [provider, entry] of Object.entries(data.providers ?? {})) {
-      for (const model of entry?.models ?? []) {
-        if (model?.id) pairs.add(`${provider}/${model.id}`);
-      }
-    }
-    return pairs;
-  } catch {
-    return new Set();
-  }
-}
-
 async function loadModels(cwd: string): Promise<ModelsData> {
   const nameMap = new Map<string, string>();
   let modelList: { id: string; name: string; provider: string }[] = [];
@@ -74,8 +30,9 @@ async function loadModels(cwd: string): Promise<ModelsData> {
   const available = await services.modelRuntime.getAvailable();
   const modelError = services.modelRuntime.getError();
   const settings: SettingsManager = services.settingsManager;
-  const enabledModels = settings.getEnabledModels();
-  const visible = filterByExactEnabledModels(available, enabledModels, getDeclaredModels());
+  // Web 端模型下拉 = 所有已配置凭证的可用模型。settings.json 的 enabledModels
+  // 白名单只服务于 CLI 模型循环，不再隐藏 Web 端新配置的 provider / 模型。
+  const visible = available;
   modelList = visible.map((m: { id: string; name: string; provider: string }) => ({
     id: m.id,
     name: m.name,

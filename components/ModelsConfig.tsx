@@ -1271,7 +1271,93 @@ function AddProviderPicker({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function ModelsConfig({ onClose }: { onClose: () => void }) {
+// ── 模型可见性开关 ────────────────────────────────────────────────────────────
+
+const VISIBILITY_THINKING_SUFFIXES = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+
+function stripThinkingSuffixClient(ref: string): string {
+  const idx = ref.lastIndexOf(":");
+  if (idx === -1) return ref;
+  return VISIBILITY_THINKING_SUFFIXES.has(ref.slice(idx + 1)) ? ref.slice(0, idx) : ref;
+}
+
+interface VisibleModelEntry { id: string; name: string; provider: string }
+
+function ModelVisibilitySection({ providerId, models, enabled, enabledCount, onToggle }: {
+  providerId: string;
+  models: VisibleModelEntry[];
+  enabled: Set<string> | null;
+  enabledCount: number;
+  onToggle: (ref: string) => void;
+}) {
+  const own = models.filter((m) => m.provider === providerId);
+  if (own.length === 0) return null;
+  const onCount = own.filter((m) => enabled === null || enabled.has(`${m.provider}/${m.id}`)).length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <SectionTitle>可见模型 · Visible models</SectionTitle>
+        <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{onCount}/{own.length} 已开启</span>
+      </div>
+      <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
+        只有开启的模型会出现在输入框下方的模型切换列表中（与 pi CLI 模型循环共用同一份配置）。
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden" }}>
+        {own.map((m, index) => {
+          const ref = `${m.provider}/${m.id}`;
+          const on = enabled === null || enabled.has(ref);
+          const blocked = on && enabledCount <= 1;
+          return (
+            <div
+              key={ref}
+              style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "7px 10px",
+                borderTop: index === 0 ? "none" : "1px solid var(--border)",
+                background: "var(--bg-panel)",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: on ? "var(--text)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {m.name || m.id}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {ref}
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={on}
+                aria-label={`${on ? "隐藏" : "显示"} ${m.name || m.id}`}
+                title={blocked ? "至少保留一个可见模型" : on ? "点击后从底部模型列表隐藏" : "点击后显示在底部模型列表"}
+                disabled={blocked}
+                onClick={() => onToggle(ref)}
+                style={{
+                  width: 32, height: 18, padding: 2, flexShrink: 0,
+                  border: "none", borderRadius: 999,
+                  background: on ? "var(--accent)" : "var(--border)",
+                  cursor: blocked ? "not-allowed" : "pointer",
+                  opacity: blocked ? 0.6 : 1,
+                  transition: "background 0.15s",
+                }}
+              >
+                <span style={{
+                  display: "block", width: 14, height: 14, borderRadius: "50%",
+                  background: "#fff",
+                  transform: on ? "translateX(14px)" : "translateX(0)",
+                  transition: "transform 0.15s",
+                }} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function ModelsConfig({ onClose, cwd }: { onClose: () => void; cwd?: string | null }) {
   const isMobile = useIsMobile();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
   const [loading, setLoading] = useState(true);
@@ -1282,6 +1368,63 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [visibility, setVisibility] = useState<{ allModels: VisibleModelEntry[]; enabled: Set<string> | null }>({ allModels: [], enabled: null });
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
+
+  const loadVisibility = useCallback(() => {
+    if (!cwd) return;
+    fetch(`/api/models?all=1&cwd=${encodeURIComponent(cwd)}`)
+      .then((r) => r.json())
+      .then((d: { allModels?: VisibleModelEntry[]; enabledModels?: string[] | null }) => {
+        const all = d.allModels ?? [];
+        const refs = new Set(all.map((m) => `${m.provider}/${m.id}`));
+        let enabled: Set<string> | null = null;
+        if (d.enabledModels && d.enabledModels.length > 0) {
+          const parsed = new Set<string>();
+          for (const raw of d.enabledModels) {
+            const stripped = stripThinkingSuffixClient(raw);
+            if (refs.has(stripped)) parsed.add(stripped);
+            else {
+              const match = all.find((m) => m.id === stripped);
+              if (match) parsed.add(`${match.provider}/${match.id}`);
+            }
+          }
+          if (parsed.size > 0 && parsed.size < refs.size) enabled = parsed;
+        }
+        setVisibility({ allModels: all, enabled });
+      })
+      .catch(() => {});
+  }, [cwd]);
+
+  const enabledCount = visibility.enabled?.size ?? visibility.allModels.length;
+
+  const toggleModelVisibility = useCallback(async (ref: string) => {
+    if (visibilitySaving) return;
+    const allRefs = new Set(visibility.allModels.map((m) => `${m.provider}/${m.id}`));
+    const next = new Set(visibility.enabled ?? allRefs);
+    if (next.has(ref)) {
+      if (next.size <= 1) return; // 至少保留一个可见模型
+      next.delete(ref);
+    } else {
+      next.add(ref);
+    }
+    const allOn = next.size >= allRefs.size;
+    const previous = visibility.enabled;
+    setVisibility((v) => ({ ...v, enabled: allOn ? null : next }));
+    setVisibilitySaving(true);
+    try {
+      const res = await fetch("/api/models/enabled", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabledModels: allOn ? null : [...next] }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      setVisibility((v) => ({ ...v, enabled: previous }));
+    } finally {
+      setVisibilitySaving(false);
+    }
+  }, [visibility, visibilitySaving]);
 
   const loadOAuthProviders = useCallback(() => {
     fetch("/api/auth/providers")
@@ -1310,7 +1453,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       .finally(() => setLoading(false));
     loadOAuthProviders();
     loadApiKeyProviders();
-  }, [loadOAuthProviders, loadApiKeyProviders]);
+    loadVisibility();
+  }, [loadOAuthProviders, loadApiKeyProviders, loadVisibility]);
 
   const addCustomProvider = useCallback(() => {
     let finalName = "new-provider";
@@ -1415,25 +1559,60 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     if (selection.type === "oauth") {
       const p = oauthProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
-      return <OAuthDetail key={p.id} provider={p} onRefresh={loadOAuthProviders} />;
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <OAuthDetail key={p.id} provider={p} onRefresh={loadOAuthProviders} />
+          {p.loggedIn && (
+            <ModelVisibilitySection
+              providerId={p.id}
+              models={visibility.allModels}
+              enabled={visibility.enabled}
+              enabledCount={enabledCount}
+              onToggle={(ref) => void toggleModelVisibility(ref)}
+            />
+          )}
+        </div>
+      );
     }
     if (selection.type === "apikey") {
       const p = apiKeyProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
-      return <ApiKeyDetail key={p.id} provider={p} onRefresh={loadApiKeyProviders} />;
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <ApiKeyDetail key={p.id} provider={p} onRefresh={loadApiKeyProviders} />
+          {p.configured && (
+            <ModelVisibilitySection
+              providerId={p.id}
+              models={visibility.allModels}
+              enabled={visibility.enabled}
+              enabledCount={enabledCount}
+              onToggle={(ref) => void toggleModelVisibility(ref)}
+            />
+          )}
+        </div>
+      );
     }
     if (selection.type === "provider") {
       const provider = config.providers?.[selection.name];
       if (!provider) return null;
       return (
-        <ProviderDetail
-          key={selection.name}
-          name={selection.name}
-          provider={provider}
-          onChange={(p) => updateProvider(selection.name, p)}
-          onRename={(n) => renameProvider(selection.name, n)}
-          onDelete={() => deleteProvider(selection.name)}
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <ProviderDetail
+            key={selection.name}
+            name={selection.name}
+            provider={provider}
+            onChange={(p) => updateProvider(selection.name, p)}
+            onRename={(n) => renameProvider(selection.name, n)}
+            onDelete={() => deleteProvider(selection.name)}
+          />
+          <ModelVisibilitySection
+            providerId={selection.name}
+            models={visibility.allModels}
+            enabled={visibility.enabled}
+            enabledCount={enabledCount}
+            onToggle={(ref) => void toggleModelVisibility(ref)}
+          />
+        </div>
       );
     }
     const provider = config.providers?.[selection.providerName];

@@ -4,6 +4,10 @@ export interface ModelsData {
   defaultModel: { provider: string; modelId: string } | null;
   thinkingLevels: Record<string, string[]>;
   thinkingLevelMaps: Record<string, Record<string, string | null>>;
+  /** 全量可用模型（仅 ?all=1 时返回，供 Models 对话框开关使用） */
+  allModels?: { id: string; name: string; provider: string }[];
+  /** 当前可见白名单；null 表示未设置（全部可见） */
+  enabledModels?: string[] | null;
   modelError?: string;
 }
 

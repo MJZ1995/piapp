@@ -893,6 +893,12 @@ export function AppShell() {
               tooltipParts.push(`out: ${t.output.toLocaleString()}`);
               tooltipParts.push(`cache read: ${t.cacheRead.toLocaleString()}`);
               tooltipParts.push(`cache write: ${t.cacheWrite.toLocaleString()}`);
+              const hitRate = t.input + t.cacheRead + t.cacheWrite > 0
+                ? (t.cacheRead / (t.input + t.cacheRead + t.cacheWrite)) * 100
+                : null;
+              if (hitRate !== null && (t.cacheRead > 0 || t.cacheWrite > 0)) {
+                tooltipParts.push(`cache hit: ${hitRate.toFixed(1)}%`);
+              }
               if (c > 0) tooltipParts.push(`cost: $${c.toFixed(4)}`);
             }
             if (contextUsage?.contextWindow) {
@@ -1030,12 +1036,19 @@ export function AppShell() {
                       ["Tool Results", sessionStats.toolResults.toLocaleString()],
                       ["Total", sessionStats.totalMessages.toLocaleString()],
                     ];
+                    const tk = sessionStats.tokens;
+                    const cacheHitRate = tk.input + tk.cacheRead + tk.cacheWrite > 0
+                      ? (tk.cacheRead / (tk.input + tk.cacheRead + tk.cacheWrite)) * 100
+                      : null;
                     const tokenRows = [
-                      ["Input", sessionStats.tokens.input.toLocaleString()],
-                      ["Output", sessionStats.tokens.output.toLocaleString()],
-                      ...(sessionStats.tokens.cacheRead > 0 ? [["Cache Read", sessionStats.tokens.cacheRead.toLocaleString()]] : []),
-                      ...(sessionStats.tokens.cacheWrite > 0 ? [["Cache Write", sessionStats.tokens.cacheWrite.toLocaleString()]] : []),
-                      ["Total", sessionStats.tokens.total.toLocaleString()],
+                      ["Input", tk.input.toLocaleString()],
+                      ["Output", tk.output.toLocaleString()],
+                      ...(tk.cacheRead > 0 ? [["Cache Read", tk.cacheRead.toLocaleString()]] : []),
+                      ...(tk.cacheWrite > 0 ? [["Cache Write", tk.cacheWrite.toLocaleString()]] : []),
+                      ...(cacheHitRate !== null && (tk.cacheRead > 0 || tk.cacheWrite > 0)
+                        ? [[`Cache Hit ${cacheHitRate >= 50 ? "🟢" : cacheHitRate >= 20 ? "🟡" : "🔴"}`, `${cacheHitRate.toFixed(1)}%`]]
+                        : []),
+                      ["Total", tk.total.toLocaleString()],
                     ];
                     const ctx = contextUsage ?? sessionStats.contextUsage;
                     const formatCompact = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);

@@ -1,5 +1,6 @@
 import { stat } from "fs/promises";
-import { resolve } from "path";
+import { readFileSync } from "fs";
+import { join, resolve } from "path";
 import { createAgentSessionServices, getAgentDir, type SettingsManager } from "@earendil-works/pi-coding-agent";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { loadModelsWithCache, withModelRuntimeError, type ModelsData } from "@/lib/models-cache";
@@ -31,12 +32,34 @@ function stripThinkingSuffix(modelRef: string): string {
 function filterByExactEnabledModels<T extends { id: string; provider: string }>(
   available: readonly T[],
   enabledModels: string[] | undefined,
+  declaredModels: ReadonlySet<string>,
 ): readonly T[] {
+  // 用户在 Models 对话框（models.json）里显式声明的模型视为显式启用，
+  // 不被 enabledModels 白名单隐藏；白名单继续约束其他自动发现的模型。
+  const declared = available.filter((m) => declaredModels.has(`${m.provider}/${m.id}`));
   if (!enabledModels || enabledModels.length === 0) return available;
 
   const refs = new Set(enabledModels.map(stripThinkingSuffix).filter(Boolean));
   const visible = available.filter((m) => refs.has(`${m.provider}/${m.id}`) || refs.has(m.id));
-  return visible.length > 0 ? visible : available;
+  const merged = [...visible, ...declared.filter((m) => !visible.includes(m))];
+  return merged.length > 0 ? merged : available;
+}
+
+function getDeclaredModels(): Set<string> {
+  try {
+    const data = JSON.parse(readFileSync(join(getAgentDir(), "models.json"), "utf8")) as {
+      providers?: Record<string, { models?: { id?: string }[] }>;
+    };
+    const pairs = new Set<string>();
+    for (const [provider, entry] of Object.entries(data.providers ?? {})) {
+      for (const model of entry?.models ?? []) {
+        if (model?.id) pairs.add(`${provider}/${model.id}`);
+      }
+    }
+    return pairs;
+  } catch {
+    return new Set();
+  }
 }
 
 async function loadModels(cwd: string): Promise<ModelsData> {
@@ -52,7 +75,7 @@ async function loadModels(cwd: string): Promise<ModelsData> {
   const modelError = services.modelRuntime.getError();
   const settings: SettingsManager = services.settingsManager;
   const enabledModels = settings.getEnabledModels();
-  const visible = filterByExactEnabledModels(available, enabledModels);
+  const visible = filterByExactEnabledModels(available, enabledModels, getDeclaredModels());
   modelList = visible.map((m: { id: string; name: string; provider: string }) => ({
     id: m.id,
     name: m.name,

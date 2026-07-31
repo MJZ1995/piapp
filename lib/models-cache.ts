@@ -4,11 +4,16 @@ export interface ModelsData {
   defaultModel: { provider: string; modelId: string } | null;
   thinkingLevels: Record<string, string[]>;
   thinkingLevelMaps: Record<string, Record<string, string | null>>;
+  /** `provider/modelId` → thinking level pinned by an `enabledModels` `:level` suffix. */
+  thinkingLevelPins: Record<string, string>;
+
   /** 全量可用模型（仅 ?all=1 时返回，供 Models 对话框开关使用） */
   allModels?: { id: string; name: string; provider: string }[];
   /** 当前可见白名单；null 表示未设置（全部可见） */
   enabledModels?: string[] | null;
   modelError?: string;
+  /** Warnings from resolving the `enabledModels` scope (e.g. a pattern matched nothing). */
+  modelScopeWarnings?: string[];
 }
 
 interface ModelsCacheState {

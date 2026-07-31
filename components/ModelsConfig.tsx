@@ -92,6 +92,8 @@ interface OAuthProvider {
   name: string;
   usesCallbackServer: boolean;
   loggedIn: boolean;
+  /** Provider also accepts an API key, so it appears in both picker sections. */
+  supportsApiKey?: boolean;
 }
 
 interface ApiKeyProvider {
@@ -100,6 +102,8 @@ interface ApiKeyProvider {
   configured: boolean;
   source?: string;
   modelCount: number;
+  /** Provider also supports OAuth, so it appears in both picker sections. */
+  supportsOAuth?: boolean;
 }
 
 type OAuthLoginState =
@@ -1813,6 +1817,15 @@ export function ModelsConfig({ onClose, cwd }: { onClose: () => void; cwd?: stri
       .catch(() => {});
   }, []);
 
+  // A dual-auth provider moves between the two lists when its credential type
+  // changes, so any auth change has to reload both — refreshing only one leaves
+  // the provider rendered twice, and disconnecting the stale row would delete
+  // the credential that was just created (#309).
+  const refreshAuthProviders = useCallback(() => {
+    loadOAuthProviders();
+    loadApiKeyProviders();
+  }, [loadOAuthProviders, loadApiKeyProviders]);
+
   useEffect(() => {
     fetch("/api/models-config")
       .then((r) => r.json())
@@ -1824,10 +1837,9 @@ export function ModelsConfig({ onClose, cwd }: { onClose: () => void; cwd?: stri
       })
       .catch(() => setConfig({ providers: {} }))
       .finally(() => setLoading(false));
-    loadOAuthProviders();
-    loadApiKeyProviders();
+    refreshAuthProviders();
     loadVisibility();
-  }, [loadOAuthProviders, loadApiKeyProviders, loadVisibility]);
+  }, [refreshAuthProviders, loadVisibility]);
 
   const addCustomProvider = useCallback(() => {
     let finalName = "new-provider";
@@ -1948,7 +1960,7 @@ export function ModelsConfig({ onClose, cwd }: { onClose: () => void; cwd?: stri
       if (!p) return null;
       return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <OAuthDetail key={p.id} provider={p} onRefresh={loadOAuthProviders} />
+          <OAuthDetail key={p.id} provider={p} onRefresh={refreshAuthProviders} />
           {p.loggedIn && (
             <ModelVisibilitySection
               providerId={p.id}
@@ -1966,7 +1978,7 @@ export function ModelsConfig({ onClose, cwd }: { onClose: () => void; cwd?: stri
       if (!p) return null;
       return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <ApiKeyDetail key={p.id} provider={p} onRefresh={loadApiKeyProviders} />
+          <ApiKeyDetail key={p.id} provider={p} onRefresh={refreshAuthProviders} />
           {p.configured && (
             <ModelVisibilitySection
               providerId={p.id}

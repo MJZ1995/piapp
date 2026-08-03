@@ -20,11 +20,15 @@ export const metadata: Metadata = {
     icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Yasuo Agent" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Yasuo Agent" },
   formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#1a1a1a" },
@@ -46,7 +50,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body translate="no" className="notranslate" style={{ height: "100dvh", display: "flex", flexDirection: "column" }}>
+      <body translate="no" className="notranslate">
         {children}
         <PwaRegistration />
       </body>

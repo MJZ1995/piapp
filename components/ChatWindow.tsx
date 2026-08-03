@@ -209,7 +209,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     isAutoModelSelection,
     agentPhase,
     isNew,
-    sessionIdRef, messagesEndRef, scrollContainerRef,
+    sessionIdRef, messagesEndRef, scrollContainerRef, streamEndRef,
     lastUserMsgRef,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
@@ -726,6 +726,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               />
             )}
 
+            <div ref={streamEndRef} />
             {agentRunning && (
               <div style={{ height: scrollContainerRef.current ? scrollContainerRef.current.clientHeight : "80vh" }} />
             )}

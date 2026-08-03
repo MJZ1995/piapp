@@ -400,6 +400,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const userScrollIntentUntilRef = useRef(0);
   const ignoreProgrammaticScrollUntilRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  // 真实内容尾部标记（位于运行期占位空间之前），用于流式期间贴底跟随
+  const streamEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const ensuringNewSessionRef = useRef<Promise<string | null> | null>(null);
   const newSessionPromotedRef = useRef(false);
@@ -1720,8 +1722,31 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!agentRunningRef.current) return;
     if (Date.now() < ignoreProgrammaticScrollUntilRef.current) return;
     if (Date.now() > userScrollIntentUntilRef.current) return;
-    completionScrollAllowedRef.current = false;
+    const container = scrollContainerRef.current;
+    const tail = streamEndRef.current;
+    if (container && tail) {
+      // 用户上翻离开尾部→停止跟随；滚回尾部可见→恢复跟随
+      completionScrollAllowedRef.current = tail.getBoundingClientRect().top <= container.getBoundingClientRect().bottom + 8;
+    } else {
+      completionScrollAllowedRef.current = false;
+    }
   }, []);
+
+  // 流式期间贴底跟随：仅当内容尾部超出视口时做最小滚动；用户上翻后停止。
+  // 无依赖数组——每次渲染后检查一次，scrollTop 调整代价极低。
+  useEffect(() => {
+    if (!agentRunningRef.current) return;
+    if (!completionScrollAllowedRef.current) return;
+    const container = scrollContainerRef.current;
+    const tail = streamEndRef.current;
+    if (!container || !tail) return;
+    const containerBottom = container.getBoundingClientRect().bottom;
+    const tailTop = tail.getBoundingClientRect().top;
+    if (tailTop > containerBottom - 8) {
+      ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
+      container.scrollTop += tailTop - (containerBottom - 8);
+    }
+  });
 
   // Load session on mount
   useEffect(() => {
@@ -1861,7 +1886,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentPhase,
     isNew,
     // Refs
-    sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
+    sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef, streamEndRef,
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef,
     // Actions
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,

@@ -419,6 +419,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const [serverProjects, setServerProjects] = useState<string[] | null>(null);
+  const [serverArchivedProjects, setServerArchivedProjects] = useState<string[]>([]);
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
   // Once polling has delivered a snapshot it is the source of truth for
@@ -433,9 +434,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       if (showLoading) setLoading(true);
       const res = await fetch("/api/sessions");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as { sessions: SessionInfo[]; runningSessionIds?: string[]; projects?: string[] };
+      const data = await res.json() as { sessions: SessionInfo[]; runningSessionIds?: string[]; projects?: string[]; archivedProjects?: string[] };
       setAllSessions(data.sessions);
       if (data.projects) setServerProjects(data.projects);
+      if (data.archivedProjects) setServerArchivedProjects(data.archivedProjects);
       // Treat the fetched running set as an initial fallback only. Once the
       // lightweight poll is live, a slow session-list fetch cannot overwrite it.
       if (!runningPollAuthoritativeRef.current) {
@@ -1099,6 +1101,49 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 ))}
                 {visibleProjects.length === 0 && projectFilter.trim() && (
                    <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{t("sidebar.noMatchingProjects")}</div>
+                )}
+                {serverArchivedProjects.length > 0 && !projectFilter.trim() && (
+                  <>
+                    <div style={{ padding: "5px 10px 3px", fontSize: 10, color: "var(--text-dim)", borderTop: "1px solid var(--border)" }}>
+                      已移动或删除（会话仍保留）
+                    </div>
+                    {serverArchivedProjects.map((project) => (
+                      <button
+                        key={project}
+                        onClick={() => {
+                          setSelectedCwd(project);
+                          setProjectFilter("");
+                          setCustomPathOpen(false);
+                          setCustomPathValue("");
+                          setCustomPathError(null);
+                          setDropdownOpen(false);
+                        }}
+                        title={`${project}\n目录已不存在，会话仅供查看`}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 7,
+                          width: "100%",
+                          padding: "8px 10px",
+                          background: "var(--bg)",
+                          border: "none",
+                          borderBottom: "1px solid var(--border)",
+                          color: "var(--text-dim)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          fontSize: 11,
+                          fontFamily: "var(--font-mono)",
+                          fontStyle: "italic",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <span style={{ width: 10, flexShrink: 0 }} />
+                        <PathLabel text={displayCwd(project, homeDir)} style={{ flex: 1 }} />
+                      </button>
+                    ))}
+                  </>
                 )}
               </div>
 

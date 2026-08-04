@@ -7,9 +7,12 @@ const path = require("path");
 const { app, dialog, ipcMain, nativeImage } = require("electron");
 const { Config, isValidRepo } = require("./config");
 const server = require("./server");
+const runtime = require("./runtime");
 const win = require("./window");
 const { installAppMenu } = require("./menu");
 const { AppTray } = require("./tray");
+const { LanShare } = require("./lan-share");
+const { LanUpdater } = require("./lan-update");
 const { registerToggleShortcut, unregisterAll } = require("./shortcut");
 const { RunningWatcher, notifySessionFinished, playFinishSound } = require("./notify");
 
@@ -35,6 +38,7 @@ process.on("unhandledRejection", (e) => log("unhandledRejection:", e && e.stack 
 let serverHandle = null;
 let watcher = null;
 let tray = null;
+let lanShare = null;
 let cfg = null;
 
 function createWindowIfReady() {
@@ -114,8 +118,11 @@ if (!gotLock) {
     // 应用菜单（File > New Window ⌘N）
     installAppMenu({ onNewWindow: newWindow });
 
-    // 仓库目录：config.json → 默认候选 → 首次启动弹框选择
-    if (!cfg.repoPath) {
+    // 自包含模式（同事分发）：打包且未配置 repoPath → 使用内置运行时
+    const packaged = runtime.resolvePackagedRuntime({ app, cfg, log });
+
+    // 仓库目录：config.json → 默认候选 → 首次启动弹框选择（自包含模式跳过）
+    if (!packaged && !cfg.repoPath) {
       const picked = await dialog.showOpenDialog({
         title: "请选择 pi-web 仓库目录（包含 bin/pi-web.js）",
         properties: ["openDirectory"],
@@ -128,9 +135,9 @@ if (!gotLock) {
       }
       cfg.set({ repoPath: dir });
     }
-    log("repo:", cfg.repoPath);
+    if (!packaged) log("repo:", cfg.repoPath);
 
-    const nodePath = server.resolveNode(cfg.nodePath);
+    const nodePath = packaged ? packaged.nodePath : server.resolveNode(cfg.nodePath);
     if (!nodePath) {
       dialog.showErrorBox(
         "找不到 Node.js",
@@ -158,7 +165,10 @@ if (!gotLock) {
       return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
     });
 
-    serverHandle = await startServerWithRetry(cfg, nodePath);
+    serverHandle = await startServerWithRetry(
+      packaged ? { ...cfg, repoPath: packaged.repoPath, port: cfg.port } : cfg,
+      nodePath,
+    );
     if (!serverHandle) return; // 用户选择退出
     log(`服务就绪：mode=${serverHandle.mode} port=${serverHandle.port}`);
 
@@ -177,12 +187,45 @@ if (!gotLock) {
       win.createWindow({ url: serverUrl, port: serverHandle.port });
     }
 
+    // 局域网更新：发布端（有 repoPath 的开发机）可分享；同事端可检查更新
+    const updateDir = cfg.repoPath ? path.join(cfg.repoPath, "desktop", "update") : null;
+    if (updateDir) lanShare = new LanShare({ updateDir, log });
+    const lanUpdater = new LanUpdater({ cfg, log, tray: null });
+
     tray = new AppTray({
       iconPath: path.join(__dirname, "..", "assets", "tray.png"),
       onToggleWindow: toggleWindow,
       onQuit: quitApp,
+      onShareToggle: lanShare ? async () => {
+        if (lanShare.sharing) {
+          lanShare.stop();
+          tray.setShareState({ sharing: false, code: null });
+        } else {
+          try {
+            const { code } = await lanShare.start();
+            const m = lanShare.manifest();
+            tray.setShareState({ sharing: true, code, version: m && m.version });
+            dialog.showMessageBox({ type: "info", title: "局域网更新分享", message: "更新分享已开启", detail: `版本：${(m && m.version) || "未知"}\n配对码：${code}\n\n请同事在其托盘菜单点击「检查局域网更新…」，并输入此配对码。`, buttons: ["好"] });
+          } catch (e) {
+            dialog.showErrorBox("无法开启分享", String((e && e.message) || e));
+          }
+        }
+      } : null,
+      onCheckUpdate: () => { void lanUpdater.run(); },
       log,
     });
+    lanUpdater.tray = tray;
+
+    // PI_WEB_LAN_SHARE_AUTO=1：启动即自动开启更新分享（托盘可手动关）
+    if (lanShare && process.env.PI_WEB_LAN_SHARE_AUTO === "1") {
+      lanShare.start()
+        .then(({ code }) => {
+          const m = lanShare.manifest();
+          tray.setShareState({ sharing: true, code, version: m && m.version });
+          log(`自动开启更新分享，配对码=${code}`);
+        })
+        .catch((e) => log("自动分享失败：", (e && e.message) || e));
+    }
 
     registerToggleShortcut(cfg.shortcut, toggleWindow, log);
 
@@ -219,6 +262,7 @@ if (!gotLock) {
 
   app.on("before-quit", () => {
     if (watcher) watcher.stop();
+    if (lanShare && lanShare.sharing) lanShare.stop();
     server.stopServer(serverHandle, log);
   });
 

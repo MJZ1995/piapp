@@ -10,8 +10,27 @@ files:
 mac:
   category: public.app-category.developer-tools
   icon: assets/icon.icns
-  target: dir
+  target:
+    - dir
+    - dmg
   identity: "Apple Development: jingzhou.mao@openverse.io (Y564VV8JSX)"
+extraResources:
+  # 自包含运行时（pack-runtime.sh 生成）：Node + pi-web 生产产物
+  - from: update/runtime
+    to: runtime
 asar: true
 asarUnpack:
   - assets/hasagi.m4a
+dmg:
+  contents:
+    - x: 110
+      y: 150
+      type: link
+      path: /Applications
+    - x: 390
+      y: 150
+      type: file
+    - x: 240
+      y: 330
+      type: file
+      path: assets/首次打开说明.txt

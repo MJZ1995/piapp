@@ -4,10 +4,13 @@
 const { app, Menu, Tray, nativeImage } = require("electron");
 
 class AppTray {
-  constructor({ iconPath, onToggleWindow, onQuit, log }) {
+  constructor({ iconPath, onToggleWindow, onQuit, onShareToggle, onCheckUpdate, log }) {
     this.log = log;
     this.onToggleWindow = onToggleWindow;
     this.onQuit = onQuit;
+    this.onShareToggle = onShareToggle || null;
+    this.onCheckUpdate = onCheckUpdate || null;
+    this.shareInfo = { sharing: false, code: null, version: null };
     this.runningCount = 0;
 
     let image = nativeImage.createFromPath(iconPath);
@@ -29,12 +32,29 @@ class AppTray {
     this.rebuildMenu();
   }
 
+  setShareState(info) {
+    this.shareInfo = { ...this.shareInfo, ...info };
+    this.rebuildMenu();
+  }
+
   rebuildMenu() {
     if (!this.tray) return;
     const launchAtLogin = app.getLoginItemSettings().openAtLogin;
-    const menu = Menu.buildFromTemplate([
+    const template = [
       { label: "显示 / 隐藏 Yasuo Agent", click: () => this.onToggleWindow() },
       { label: `运行中的会话：${this.runningCount}`, enabled: false },
+      { type: "separator" },
+    ];
+    if (this.onShareToggle) {
+      template.push({
+        label: this.shareInfo.sharing ? `关闭更新分享（配对码 ${this.shareInfo.code}）` : "分享局域网更新…",
+        click: () => this.onShareToggle(),
+      });
+    }
+    if (this.onCheckUpdate) {
+      template.push({ label: "检查局域网更新…", click: () => this.onCheckUpdate() });
+    }
+    template.push(
       { type: "separator" },
       {
         label: "开机自动启动",
@@ -44,7 +64,8 @@ class AppTray {
       },
       { type: "separator" },
       { label: "退出 Yasuo Agent", click: () => this.onQuit() },
-    ]);
+    );
+    const menu = Menu.buildFromTemplate(template);
     this.tray.setContextMenu(menu);
   }
 }

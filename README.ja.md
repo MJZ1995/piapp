@@ -21,8 +21,15 @@ npx @agegr/pi-web@latest
 **またはグローバルにインストール：**
 
 ```bash
-npm install -g @agegr/pi-web
+# 初回インストールまたはアップグレード
+npm install -g @agegr/pi-web@latest
 pi-web
+```
+
+**グローバルインストールをアンインストール：**
+
+```bash
+npm uninstall -g @agegr/pi-web
 ```
 
 続いて [http://127.0.0.1:30141](http://127.0.0.1:30141) を開きます。サーバーの準備が整うと、CLI はブラウザを自動的に開こうとします。Pi Web はデフォルトで `127.0.0.1` のみをリッスンします。
@@ -82,6 +89,7 @@ npx @agegr/pi-web@latest
 
 - **データディレクトリ**：Pi Web はデフォルトで `~/.pi/agent/sessions` を読み込みます。別の pi エージェントディレクトリを指定するには `PI_CODING_AGENT_DIR` を設定してください。
 - **セッションファイル**：ファイルは `~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl` に保存されます。
+- **実行環境**：セッションの作業ディレクトリを利用できるよう、Pi Web は pi と同じ OS またはコンテナで実行してください。
 - **モデル設定**：Models パネルは pi エージェントディレクトリ内の `models.json` を読み書きします。モデルの一覧とデフォルト値は pi の設定から取得されます。
 - **ファイルアクセス**：ファイルの閲覧とプレビューは、選択したプロジェクトディレクトリとセッションに含まれる作業ディレクトリに限定されます。
 - **Git worktree**：切り替え機能が表示される条件、新しい worktree の作成方法、削除時の動作については、[Pi Web の Worktree](./docs/worktrees.md) を参照してください。

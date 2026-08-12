@@ -1,7 +1,7 @@
 "use client";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, CustomMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
+import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, BlockingExtensionUiRequest, CustomMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
@@ -32,6 +32,7 @@ interface Props {
   newSessionCwd: string | null;
   newSessionDraftKey: string | null;
   onAgentEnd?: () => void;
+  onAttentionNeeded?: (request: BlockingExtensionUiRequest) => void;
   onSessionCreated?: (session: SessionInfo, sourceDraftKey: string) => void;
   onSessionForked?: (newSessionId: string) => void;
   modelsRefreshKey?: number;
@@ -206,8 +207,8 @@ function withAssistantBlocks(
   return next;
 }
 
-function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { messageCount: number; toolCallCount: number; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
-  const [expanded, setExpanded] = useState(false);
+function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = false, children, t }: { messageCount: number; toolCallCount: number; defaultExpanded?: boolean; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const parts = [t("chat.processDetails"), `${messageCount} ${t(messageCount === 1 ? "chat.message" : "chat.messages")}`];
   if (toolCallCount > 0) parts.push(`${toolCallCount} ${t(toolCallCount === 1 ? "chat.toolCall" : "chat.toolCalls")}`);
 
@@ -249,7 +250,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio, terminalAvailable, terminalOpen, onTerminalToggle }: Props) {
+export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio, terminalAvailable, terminalOpen, onTerminalToggle }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
 
@@ -290,9 +291,9 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
-    handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands, scrollToBottom, scrollUserMsgToTop,
+    handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands, scrollUserMsgToTop,
   } = useAgentSession({
-    session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
+    session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
   });
   const sessionBusy = agentRunning || bashRunning;
@@ -423,65 +424,19 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
   const hasStreamingContent = Boolean(streamState.streamingMessage?.content.length);
   const messageCwd = session?.cwd ?? newSessionCwd ?? undefined;
-  const bottomComposerRef = useRef<HTMLDivElement | null>(null);
-  const [bottomComposerHeight, setBottomComposerHeight] = useState(0);
-  const bottomComposerHeightRef = useRef(0);
-  const bottomComposerScrollFrameRef = useRef<number | null>(null);
   const messageContentRef = useRef<HTMLDivElement | null>(null);
   const promptAnchorSpacerRef = useRef<HTMLDivElement | null>(null);
   const promptAnchorSpacerHeightRef = useRef(0);
   const promptAnchorMeasureFrameRef = useRef<number | null>(null);
-
-  useLayoutEffect(() => {
-    const composer = bottomComposerRef.current;
-    if (!composer) {
-      bottomComposerHeightRef.current = 0;
-      setBottomComposerHeight(0);
-      return;
-    }
-
-    const updateBottomComposerHeight = () => {
-      const nextHeight = Math.ceil(composer.getBoundingClientRect().height);
-      if (bottomComposerHeightRef.current === nextHeight) return;
-
-      const previousHeight = bottomComposerHeightRef.current;
-      bottomComposerHeightRef.current = nextHeight;
-      setBottomComposerHeight(nextHeight);
-
-      if (bottomComposerScrollFrameRef.current !== null) {
-        cancelAnimationFrame(bottomComposerScrollFrameRef.current);
-      }
-      bottomComposerScrollFrameRef.current = requestAnimationFrame(() => {
-        bottomComposerScrollFrameRef.current = null;
-        const currentContainer = scrollContainerRef.current;
-        const distanceFromBottom = currentContainer
-          ? currentContainer.scrollHeight - currentContainer.clientHeight - currentContainer.scrollTop
-          : Number.POSITIVE_INFINITY;
-        // Preserve a tail-pinned view while avoiding a jump for history readers.
-        if (distanceFromBottom <= Math.abs(nextHeight - previousHeight) + 1) {
-          scrollToBottom("auto");
-        }
-      });
-    };
-    updateBottomComposerHeight();
-
-    const observer = typeof ResizeObserver === "undefined"
-      ? null
-      : new ResizeObserver(updateBottomComposerHeight);
-    observer?.observe(composer);
-    return () => {
-      observer?.disconnect();
-      if (bottomComposerScrollFrameRef.current !== null) {
-        cancelAnimationFrame(bottomComposerScrollFrameRef.current);
-        bottomComposerScrollFrameRef.current = null;
-      }
-    };
-  }, [error, isEmptyNew, loading, scrollContainerRef, scrollToBottom]);
+  const promptAnchorAdjustmentDoneRef = useRef(false);
+  const promptAnchorUpdateRef = useRef<(() => void) | null>(null);
 
   useLayoutEffect(() => {
     const spacer = promptAnchorSpacerRef.current;
     if (!agentRunning || !promptAnchorActive) {
+      promptAnchorUpdateRef.current = null;
       promptAnchorSpacerHeightRef.current = 0;
+      promptAnchorAdjustmentDoneRef.current = false;
       if (spacer) spacer.style.height = "";
       return;
     }
@@ -501,28 +456,34 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
         || promptAnchorSpacerRef.current !== spacer
       ) return;
 
+      const containerTop = container.getBoundingClientRect().top;
       const userMessageTop = userMessage.getBoundingClientRect().top
-        - container.getBoundingClientRect().top
+        - containerTop
         + container.scrollTop;
       const targetTop = Math.max(0, userMessageTop - 16);
+      const contentEnd = spacer.getBoundingClientRect().top
+        - containerTop
+        + container.scrollTop;
       const nextPromptAnchorSpacerHeight = getPromptAnchorSpacerHeight(
         targetTop,
-        container.scrollHeight,
-        promptAnchorSpacerHeightRef.current,
+        contentEnd,
         container.clientHeight,
       );
 
+      const isInitialMeasurement = !promptAnchorAdjustmentDoneRef.current;
+      const needsInitialAdjustment = isInitialMeasurement
+        && nextPromptAnchorSpacerHeight > 0;
+      if (isInitialMeasurement) promptAnchorAdjustmentDoneRef.current = true;
       if (nextPromptAnchorSpacerHeight === promptAnchorSpacerHeightRef.current) return;
 
-      const needsInitialScroll = promptAnchorSpacerHeightRef.current === 0
-        && nextPromptAnchorSpacerHeight > 0;
       promptAnchorSpacerHeightRef.current = nextPromptAnchorSpacerHeight;
       spacer.style.height = nextPromptAnchorSpacerHeight > 0
         ? `${nextPromptAnchorSpacerHeight}px`
         : "";
-      if (needsInitialScroll) scrollUserMsgToTop();
+      if (needsInitialAdjustment) scrollUserMsgToTop();
     };
 
+    promptAnchorUpdateRef.current = updatePromptAnchorSpacer;
     const schedulePromptAnchorMeasure = () => {
       if (disposed || promptAnchorMeasureFrameRef.current !== null) return;
       promptAnchorMeasureFrameRef.current = requestAnimationFrame(() => {
@@ -540,6 +501,9 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     observer?.observe(userMessage);
     return () => {
       disposed = true;
+      if (promptAnchorUpdateRef.current === updatePromptAnchorSpacer) {
+        promptAnchorUpdateRef.current = null;
+      }
       observer?.disconnect();
       if (promptAnchorMeasureFrameRef.current !== null) {
         cancelAnimationFrame(promptAnchorMeasureFrameRef.current);
@@ -548,13 +512,16 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     };
   }, [
     agentRunning,
-    bottomComposerHeight,
     lastUserMsgRef,
     messages.length,
     promptAnchorActive,
     scrollContainerRef,
     scrollUserMsgToTop,
   ]);
+
+  useLayoutEffect(() => {
+    promptAnchorUpdateRef.current?.();
+  }, [streamState.streamingMessage]);
 
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
@@ -877,8 +844,9 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                     ?? (finalAnswerMessage ? undefined : visibleRefIndexByMessage.get(finalAssistantIdx));
                   const processGroup = (
                     <ProcessDetailsGroup
-                       messageCount={processCount}
-                       t={t}
+                      messageCount={processCount}
+                      defaultExpanded={!finalAnswerMessage}
+                      t={t}
                       toolCallCount={countToolCalls(messages, visibleProcessIndices) + countToolCallBlocks(finalSplit.processBlocks)}
                     >
                       {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { attachRef: false, keyPrefix: "process" }))}
@@ -957,9 +925,6 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
 
             <div ref={promptAnchorSpacerRef} aria-hidden="true" />
 
-            {/* Match the trailing space to the live bottom composer height. */}
-            <div aria-hidden="true" style={{ height: bottomComposerHeight }} />
-
             <div ref={messagesEndRef} />
             </div>
           </div>
@@ -975,7 +940,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
         )}
       </div>
 
-      <div ref={bottomComposerRef} className="relative">
+      <div className="relative">
         <div
           style={{
             padding: `0 ${CHAT_COLUMN_PADDING}px`,

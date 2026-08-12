@@ -50,7 +50,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body translate="no" className="notranslate">
+      <body translate="no" className="notranslate" suppressHydrationWarning>
         {children}
         <PwaRegistration />
       </body>

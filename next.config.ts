@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
     "@xterm/headless",
     "@xterm/addon-serialize",
   ],
-  allowedDevOrigins: ['192.168.*.*'],
+  allowedDevOrigins: ["127.0.0.1", "192.168.*.*"],
   async headers() {
     return [
       {

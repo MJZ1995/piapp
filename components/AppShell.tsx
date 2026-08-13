@@ -195,10 +195,20 @@ export function AppShell() {
   }, []);
 
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
+  const [systemPromptLoading, setSystemPromptLoading] = useState(false);
+  const systemPromptLoaderRef = useRef<(() => Promise<void>) | null>(null);
+  const systemPromptLoadIdRef = useRef(0);
   const systemBtnRef = useRef<HTMLButtonElement>(null);
 
   const handleSystemPromptChange = useCallback((prompt: string | null) => {
     setSystemPrompt(prompt);
+    setSystemPromptLoading(false);
+  }, []);
+
+  const handleSystemPromptLoaderChange = useCallback((loader: (() => Promise<void>) | null) => {
+    systemPromptLoadIdRef.current += 1;
+    systemPromptLoaderRef.current = loader;
+    setSystemPromptLoading(false);
   }, []);
 
   // Session stats (tokens + cost) — populated by ChatWindow, displayed in top bar
@@ -245,6 +255,24 @@ export function AppShell() {
     setActiveTopPanel((cur) => cur === panel ? null : panel);
     if (isMobile && keepMobileToolbarOpen) setMobileToolbarMoreOpen(true);
   }, [isMobile]);
+
+  const handleSystemPromptToggle = useCallback((keepMobileToolbarOpen = false) => {
+    const opening = activeTopPanel !== "system";
+    toggleTopPanel("system", keepMobileToolbarOpen);
+    if (!opening || systemPromptLoading) return;
+
+    const load = systemPromptLoaderRef.current;
+    if (!load) return;
+    const loadId = ++systemPromptLoadIdRef.current;
+    setSystemPromptLoading(true);
+    void load().catch((error) => {
+      console.error("Failed to load system prompt:", error);
+    }).finally(() => {
+      if (systemPromptLoadIdRef.current === loadId) {
+        setSystemPromptLoading(false);
+      }
+    });
+  }, [activeTopPanel, systemPromptLoading, toggleTopPanel]);
 
   const openSessionStatsPanel = useCallback(() => {
     if (isMobile) setSidebarOpen(false);
@@ -501,6 +529,7 @@ export function AppShell() {
     setBranchTree([]);
     setBranchActiveLeafId(null);
     setSystemPrompt(null);
+    setSystemPromptLoading(false);
     setActiveTopPanel(null);
     if (currentProject !== newProject) {
       // File tabs are keyed by absolute path, so tabs opened in the previous
@@ -535,6 +564,7 @@ export function AppShell() {
     setSelectedSession(session);
     setSessionKey((k) => k + 1);
     setSystemPrompt(null);
+    setSystemPromptLoading(false);
     setInitialSessionRestored(true);
     // On mobile, collapse the overlay drawer so the chat is revealed after pick.
     if (isMobile && !isRestore) setSidebarOpen(false);
@@ -561,6 +591,7 @@ export function AppShell() {
     setBranchTree([]);
     setBranchActiveLeafId(null);
     setSystemPrompt(null);
+    setSystemPromptLoading(false);
     setActiveTopPanel(null);
     if (isMobile) setSidebarOpen(false);
     router.replace("/", { scroll: false });
@@ -740,6 +771,7 @@ export function AppShell() {
       setBranchTree([]);
       setBranchActiveLeafId(null);
       setSystemPrompt(null);
+      setSystemPromptLoading(false);
       setActiveTopPanel(null);
       router.replace("/", { scroll: false });
     }
@@ -1297,7 +1329,7 @@ export function AppShell() {
         <button
           ref={systemBtnRef}
           type="button"
-          onClick={() => toggleTopPanel("system", mobile)}
+          onClick={() => handleSystemPromptToggle(mobile)}
           disabled={mobile && !showChat}
           title={translate("system.prompt")}
           aria-label={translate("system.prompt")}
@@ -1880,7 +1912,7 @@ export function AppShell() {
                     </div>
                   ) : (
                     <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                       {translate("system.load")}
+                       {systemPromptLoading ? translate("system.loading") : translate("system.load")}
                     </div>
                   )}
                 </div>
@@ -1917,18 +1949,11 @@ export function AppShell() {
                        [translate("session.toolResults"), sessionStats.toolResults.toLocaleString(locale)],
                        [translate("session.total"), sessionStats.totalMessages.toLocaleString(locale)],
                     ];
-                    const tk = sessionStats.tokens;
-                    const cacheHitRate = tk.input + tk.cacheRead + tk.cacheWrite > 0
-                      ? (tk.cacheRead / (tk.input + tk.cacheRead + tk.cacheWrite)) * 100
-                      : null;
                     const tokenRows = [
                        [translate("session.input"), sessionStats.tokens.input.toLocaleString(locale)],
                        [translate("session.output"), sessionStats.tokens.output.toLocaleString(locale)],
                        ...(sessionStats.tokens.cacheRead > 0 ? [[translate("session.cacheRead"), sessionStats.tokens.cacheRead.toLocaleString(locale)]] : []),
                        ...(sessionStats.tokens.cacheWrite > 0 ? [[translate("session.cacheWrite"), sessionStats.tokens.cacheWrite.toLocaleString(locale)]] : []),
-                      ...(cacheHitRate !== null && (tk.cacheRead > 0 || tk.cacheWrite > 0)
-                        ? [[`Cache Hit ${cacheHitRate >= 50 ? "🟢" : cacheHitRate >= 20 ? "🟡" : "🔴"}`, `${cacheHitRate.toFixed(1)}%`]]
-                        : []),
                        [translate("session.total"), sessionStats.tokens.total.toLocaleString(locale)],
                     ];
                     const ctx = contextUsage ?? sessionStats.contextUsage;
@@ -1936,6 +1961,10 @@ export function AppShell() {
                     const extraTokenRows = [
                        ...(sessionStats.cost > 0 ? [[translate("session.cost"), `$${sessionStats.cost.toFixed(4)}`]] : []),
                        ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.percent !== null ? `${ctx.percent.toFixed(1)}%` : "?"} / ${formatCompact(ctx.contextWindow)}`]] : []),
+                       // Cache hit rate = cache reads / (input + cache writes + cache reads) — the denominator covers all input-class tokens.
+                       ...(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite > 0 && sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input > 0
+                         ? [[translate("session.cacheHitRate"), `${(sessionStats.tokens.cacheRead / (sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input) * 100).toFixed(1)}%`]]
+                         : []),
                     ];
                     const section = (
                       title: string,
@@ -2082,6 +2111,7 @@ export function AppShell() {
               chatInputRef={chatInputRef}
               onBranchDataChange={handleBranchDataChange}
               onSystemPromptChange={handleSystemPromptChange}
+              onSystemPromptLoaderChange={handleSystemPromptLoaderChange}
               onSessionStatsChange={handleSessionStatsChange}
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}

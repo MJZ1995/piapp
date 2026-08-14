@@ -236,6 +236,8 @@ export function TerminalPanel({ cwd, isDark, open, onOpenChange, onEnabledChange
   const [maximized, setMaximized] = useState(false);
   const [height, setHeight] = useState(300);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const viewRef = useRef<TerminalViewHandle>(null);
@@ -319,13 +321,19 @@ export function TerminalPanel({ cwd, isDark, open, onOpenChange, onEnabledChange
     }
   }, [act, cwd]);
 
-  const rename = useCallback(async () => {
+  const rename = useCallback(() => {
     if (!active) return;
-    const name = window.prompt("终端名称 / Terminal name", active.name)?.trim();
-    if (!name || name === active.name) return;
+    setRenameValue(active.name);
+    setRenameOpen(true); // Electron 不支持 window.prompt，用内联输入
+  }, [active]);
+
+  const commitRename = useCallback(async () => {
+    const name = renameValue.trim();
+    setRenameOpen(false);
+    if (!active || !name || name === active.name) return;
     try { await act({ action: "rename", id: active.id, name }); }
     catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); }
-  }, [act, active]);
+  }, [act, active, renameValue]);
 
   const toggleTrust = useCallback(async () => {
     if (!active) return;
@@ -447,6 +455,23 @@ export function TerminalPanel({ cwd, isDark, open, onOpenChange, onEnabledChange
           <button type="button" onClick={() => { onOpenChange(true); setMaximized((value) => !value); }} style={buttonStyle} title={maximized ? "还原" : "最大化"} aria-label={maximized ? "还原终端面板" : "最大化终端面板"}>{maximized ? "↘" : "↗"}</button>
         </>}
       </header>
+
+      {open && renameOpen && active && (
+        <div style={{ position: "absolute", top: 34, right: 8, zIndex: 6, display: "flex", alignItems: "center", gap: 5, padding: "5px 6px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-panel)", boxShadow: "0 8px 20px rgba(0,0,0,0.18)" }}>
+          <input
+            autoFocus
+            value={renameValue}
+            onChange={(event) => setRenameValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void commitRename();
+              if (event.key === "Escape") setRenameOpen(false);
+            }}
+            onBlur={() => void commitRename()}
+            placeholder="终端名称 / Terminal name"
+            style={{ width: 180, height: 24, padding: "0 7px", border: "1px solid var(--accent)", borderRadius: 4, background: "var(--bg)", color: "var(--text)", fontSize: 11, outline: "none" }}
+          />
+        </div>
+      )}
 
       {open && searchOpen && (
         <div style={{ height: 32, display: "flex", alignItems: "center", gap: 5, padding: "4px 8px", borderBottom: "1px solid var(--border)", background: "var(--bg-panel)" }}>

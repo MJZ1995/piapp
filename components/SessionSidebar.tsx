@@ -444,6 +444,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [dragging, setDragging] = useState<{ kind: "session"; id: string; fromGid: string | null } | { kind: "group"; id: string } | null>(null);
   const [dropHint, setDropHint] = useState<{ key: string; before: boolean } | null>(null);
   const [groupDropId, setGroupDropId] = useState<string | null>(null);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState("");
   const [serverArchivedProjects, setServerArchivedProjects] = useState<string[]>([]);
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
@@ -981,6 +983,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     });
   }, []);
 
+  const commitGroupName = useCallback(() => {
+    const gid = editingGroupId;
+    const name = editingGroupName.trim();
+    setEditingGroupId(null);
+    if (!gid || !name) return;
+    updateSidebarLayout((l) => { const g = l.groups[gid]; if (g && g.name !== name) g.name = name; });
+  }, [editingGroupId, editingGroupName, updateSidebarLayout]);
+
   // Build parent-child tree within the filtered set
   const sessionTree = buildSessionTree(filteredSessions);
   const rootNodeById = new Map(sessionTree.map((n) => [n.session.id, n]));
@@ -988,9 +998,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   const handleNewGroup = () => {
     if (!selectedProject) return;
-    const name = window.prompt("分组名称", "新建分组")?.trim();
-    if (!name) return;
-    updateSidebarLayout((l) => { createGroup(l, `g${Date.now().toString(36)}`, name); });
+    const gid = `g${Date.now().toString(36)}`;
+    updateSidebarLayout((l) => { createGroup(l, gid, "新建分组"); });
+    setEditingGroupName("新建分组");
+    setEditingGroupId(gid); // Electron 不支持 window.prompt，用内联输入命名
   };
 
   return (
@@ -1890,7 +1901,27 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                 </svg>
-                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={group.name}>{group.name}</span>
+                {editingGroupId === gid ? (
+                  <input
+                    autoFocus
+                    value={editingGroupName}
+                    onChange={(e) => setEditingGroupName(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter") commitGroupName();
+                      if (e.key === "Escape") setEditingGroupId(null);
+                    }}
+                    onBlur={commitGroupName}
+                    style={{ flex: 1, minWidth: 0, background: "var(--bg)", border: "1px solid var(--accent)", borderRadius: 4, color: "var(--text)", fontSize: 11, padding: "2px 5px", outline: "none" }}
+                  />
+                ) : (
+                  <span
+                    style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    title={group.name}
+                    onDoubleClick={(e) => { e.stopPropagation(); setEditingGroupName(group.name); setEditingGroupId(gid); }}
+                  >{group.name}</span>
+                )}
                 <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>{members.length}</span>
                 <button
                   type="button"
@@ -1898,11 +1929,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   title="重命名"
                   onClick={(e) => {
                     e.stopPropagation();
-                    const name = window.prompt("分组名称", group.name)?.trim();
-                    if (name && name !== group.name) updateSidebarLayout((l) => { const g = l.groups[gid]; if (g) g.name = name; });
+                    setEditingGroupName(group.name);
+                    setEditingGroupId(gid);
                   }}
                   style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: "var(--text-dim)", fontSize: 11 }}
-                ></button>
+                >✎</button>
                 <button
                   type="button"
                   aria-label={`解散分组 ${group.name}`}

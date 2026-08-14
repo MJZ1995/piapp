@@ -1969,7 +1969,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 >×</button>
                 </span>
               </div>
-              {!group.collapsed && members.map((id) => {
+              {!group.collapsed && members.map((id, memberIdx) => {
                 const node = rootNodeById.get(id);
                 if (!node) return null;
                 const inKey = `in:${gid}:${id}`;
@@ -1998,6 +1998,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                         moveWithinGroup(l, drag.id, gid, id, before);
                       });
                       setDragging(null); setDropHint(null); setGroupDropId(null);
+                    }}
+                    style={{
+                      background: "var(--bg)",
+                      borderRadius: 8,
+                      marginTop: memberIdx === 0 ? 2 : 3,
+                      overflow: "hidden",
                     }}
                   >
                     {hintBar(inHint === true)}

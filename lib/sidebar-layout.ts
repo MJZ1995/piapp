@@ -108,7 +108,7 @@ export function moveWithinGroup(layout: SidebarLayout, sessionId: string, gid: s
 
 export function createGroup(layout: SidebarLayout, gid: string, name: string): SidebarLayout {
   layout.groups[gid] = { name, collapsed: false, order: [] };
-  layout.order.push(`g:${gid}`);
+  layout.order.unshift(`g:${gid}`); // 新建分组默认置顶
   return layout;
 }
 

@@ -991,6 +991,25 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     updateSidebarLayout((l) => { const g = l.groups[gid]; if (g && g.name !== name) g.name = name; });
   }, [editingGroupId, editingGroupName, updateSidebarLayout]);
 
+  // 自定义拖拽残影：默认残影在透明背景下可能把下方文件浏览器一起截进去
+  const dragChipRef = useRef<HTMLDivElement | null>(null);
+  const startDrag = useCallback((e: React.DragEvent, item: { kind: "session"; id: string; fromGid: string | null } | { kind: "group"; id: string }, label: string) => {
+    setDragging(item);
+    e.dataTransfer.setData("text/plain", item.id);
+    e.dataTransfer.effectAllowed = "move";
+    const chip = document.createElement("div");
+    chip.textContent = label.length > 32 ? `${label.slice(0, 32)}…` : label;
+    chip.style.cssText = "position:fixed;top:-1000px;left:-1000px;z-index:9999;padding:4px 10px;background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);box-shadow:0 6px 16px rgba(0,0,0,0.18);white-space:nowrap;";
+    document.body.appendChild(chip);
+    e.dataTransfer.setDragImage(chip, 12, 12);
+    dragChipRef.current = chip;
+  }, []);
+  const endDrag = useCallback(() => {
+    setDragging(null); setDropHint(null); setGroupDropId(null);
+    dragChipRef.current?.remove();
+    dragChipRef.current = null;
+  }, []);
+
   // Build parent-child tree within the filtered set
   const sessionTree = buildSessionTree(filteredSessions);
   const rootNodeById = new Map(sessionTree.map((n) => [n.session.id, n]));
@@ -1813,12 +1832,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 {hintBar(hintHere === true)}
                 <div
                   draggable
-                  onDragStart={(e) => {
-                    setDragging({ kind: "session", id: entry.id, fromGid: null });
-                    e.dataTransfer.setData("text/plain", entry.id);
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                  onDragEnd={() => { setDragging(null); setDropHint(null); setGroupDropId(null); }}
+                  onDragStart={(e) => startDrag(e, { kind: "session", id: entry.id, fromGid: null }, node.session.name || node.session.firstMessage || "会话")}
+                  onDragEnd={endDrag}
                 >
                   <SessionTreeItem
                     node={node}
@@ -1861,12 +1876,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               >
               <div
                 draggable
-                onDragStart={(e) => {
-                  setDragging({ kind: "group", id: gid });
-                  e.dataTransfer.setData("text/plain", gid);
-                  e.dataTransfer.effectAllowed = "move";
-                }}
-                onDragEnd={() => { setDragging(null); setDropHint(null); setGroupDropId(null); }}
+                onDragStart={(e) => startDrag(e, { kind: "group", id: gid }, group.name)}
+                onDragEnd={endDrag}
                 onDragOver={(e) => {
                   if (!dragging) return;
                   e.preventDefault();
@@ -1992,12 +2003,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                     {hintBar(inHint === true)}
                     <div
                       draggable
-                      onDragStart={(e) => {
-                        setDragging({ kind: "session", id, fromGid: gid });
-                        e.dataTransfer.setData("text/plain", id);
-                        e.dataTransfer.effectAllowed = "move";
-                      }}
-                      onDragEnd={() => { setDragging(null); setDropHint(null); setGroupDropId(null); }}
+                      onDragStart={(e) => startDrag(e, { kind: "session", id, fromGid: gid }, node.session.name || node.session.firstMessage || "会话")}
+                      onDragEnd={endDrag}
                     >
                       <SessionTreeItem
                         node={node}

@@ -1006,6 +1006,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      <style>{`.yasuo-group .yasuo-group-actions { opacity: 0; transition: opacity 0.12s; } .yasuo-group:hover .yasuo-group-actions, .yasuo-group .yasuo-group-actions:focus-within { opacity: 1; }`}</style>
       {customPathOpen && (
         <DirectoryPicker
           busy={customPathValidating}
@@ -1838,7 +1839,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             );
           }
 
-          // 分组块
+          // 分组块（Codex 风格：整体淡色圆角容器、无边框、操作悬停可见）
           const gid = entry.id;
           const group = sidebarLayout.groups[gid];
           if (!group) return null;
@@ -1847,6 +1848,17 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           return (
             <div key={entryKey} {...topDropProps}>
               {hintBar(hintHere === true)}
+              <div
+                className="yasuo-group"
+                style={{
+                  margin: "6px 6px 0",
+                  padding: "3px 3px 5px",
+                  borderRadius: 10,
+                  background: dropInto ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "color-mix(in srgb, var(--text) 5%, transparent)",
+                  outline: dropInto ? "1.5px dashed var(--accent)" : "1.5px solid transparent",
+                  transition: "background 0.12s, outline-color 0.12s",
+                }}
+              >
               <div
                 draggable
                 onDragStart={(e) => {
@@ -1879,12 +1891,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   setDragging(null); setDropHint(null); setGroupDropId(null);
                 }}
                 style={{
-                  display: "flex", alignItems: "center", gap: 5,
-                  margin: "4px 8px 0", padding: "5px 6px",
-                  borderRadius: 6,
-                  background: dropInto ? "var(--bg-selected)" : "var(--bg-panel)",
-                  border: dropInto ? "1px dashed var(--accent)" : "1px solid var(--border)",
-                  color: "var(--text-muted)", fontSize: 11, fontWeight: 600,
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "5px 7px",
+                  borderRadius: 7,
+                  color: "var(--text)", fontSize: 12, fontWeight: 500,
                   cursor: "grab", userSelect: "none",
                 }}
               >
@@ -1892,13 +1902,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   type="button"
                   aria-label={group.collapsed ? `展开分组 ${group.name}` : `收起分组 ${group.name}`}
                   onClick={(e) => { e.stopPropagation(); updateSidebarLayout((l) => { const g = l.groups[gid]; if (g) g.collapsed = !g.collapsed; }); }}
-                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", display: "flex" }}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--text-muted)", display: "flex" }}
                 >
                   <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ transform: group.collapsed ? "none" : "rotate(90deg)", transition: "transform 0.15s" }}>
                     <polyline points="3 2 7 5 3 8" />
                   </svg>
                 </button>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: "var(--text-muted)" }}>
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                 </svg>
                 {editingGroupId === gid ? (
@@ -1913,7 +1923,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       if (e.key === "Escape") setEditingGroupId(null);
                     }}
                     onBlur={commitGroupName}
-                    style={{ flex: 1, minWidth: 0, background: "var(--bg)", border: "1px solid var(--accent)", borderRadius: 4, color: "var(--text)", fontSize: 11, padding: "2px 5px", outline: "none" }}
+                    style={{ flex: 1, minWidth: 0, background: "var(--bg)", border: "1px solid var(--accent)", borderRadius: 4, color: "var(--text)", fontSize: 12, padding: "2px 6px", outline: "none" }}
                   />
                 ) : (
                   <span
@@ -1922,7 +1932,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                     onDoubleClick={(e) => { e.stopPropagation(); setEditingGroupName(group.name); setEditingGroupId(gid); }}
                   >{group.name}</span>
                 )}
-                <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>{members.length}</span>
+                <span className="yasuo-group-actions" style={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <button
                   type="button"
                   aria-label={`重命名分组 ${group.name}`}
@@ -1946,6 +1956,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   }}
                   style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: "var(--text-dim)", fontSize: 13 }}
                 >×</button>
+                </span>
               </div>
               {!group.collapsed && members.map((id) => {
                 const node = rootNodeById.get(id);
@@ -1977,7 +1988,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       });
                       setDragging(null); setDropHint(null); setGroupDropId(null);
                     }}
-                    style={{ marginLeft: 10 }}
                   >
                     {hintBar(inHint === true)}
                     <div
@@ -2007,6 +2017,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   </div>
                 );
               })}
+              </div>
               {hintBar(hintHere === false)}
             </div>
           );

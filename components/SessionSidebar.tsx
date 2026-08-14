@@ -6,6 +6,17 @@ import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { useI18n } from "@/hooks/useI18n";
+import {
+  computeTopEntries,
+  createGroup,
+  deleteGroup,
+  EMPTY_LAYOUT,
+  groupMembers,
+  moveSessionToGroup,
+  moveTopEntry,
+  moveWithinGroup,
+  type SidebarLayout,
+} from "@/lib/sidebar-layout";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 
@@ -428,6 +439,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const [serverProjects, setServerProjects] = useState<string[] | null>(null);
+  const [sidebarLayout, setSidebarLayout] = useState<SidebarLayout>(EMPTY_LAYOUT);
+  const layoutProjectRef = useRef<string | null>(null);
+  const [dragging, setDragging] = useState<{ kind: "session"; id: string; fromGid: string | null } | { kind: "group"; id: string } | null>(null);
+  const [dropHint, setDropHint] = useState<{ key: string; before: boolean } | null>(null);
+  const [groupDropId, setGroupDropId] = useState<string | null>(null);
   const [serverArchivedProjects, setServerArchivedProjects] = useState<string[]>([]);
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
@@ -929,8 +945,53 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         }
       : null);
 
+  // 侧栏布局（分组 + 手动排序）：按项目加载，变更即持久化
+  useEffect(() => {
+    if (!selectedProject) {
+      setSidebarLayout(EMPTY_LAYOUT);
+      layoutProjectRef.current = null;
+      return;
+    }
+    if (layoutProjectRef.current === selectedProject) return;
+    layoutProjectRef.current = selectedProject;
+    setSidebarLayout(EMPTY_LAYOUT);
+    fetch(`/api/sidebar-layout?cwd=${encodeURIComponent(selectedProject)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && Array.isArray(d.order) && d.groups && typeof d.groups === "object") {
+          setSidebarLayout({ order: d.order, groups: d.groups });
+        }
+      })
+      .catch(() => {});
+  }, [selectedProject]);
+
+  const updateSidebarLayout = useCallback((mutate: (l: SidebarLayout) => void) => {
+    setSidebarLayout((prev) => {
+      const next = structuredClone(prev);
+      mutate(next);
+      const cwd = layoutProjectRef.current;
+      if (cwd) {
+        void fetch("/api/sidebar-layout", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cwd, layout: next }),
+        }).catch(() => {});
+      }
+      return next;
+    });
+  }, []);
+
   // Build parent-child tree within the filtered set
   const sessionTree = buildSessionTree(filteredSessions);
+  const rootNodeById = new Map(sessionTree.map((n) => [n.session.id, n]));
+  const topEntries = computeTopEntries(sessionTree.map((n) => n.session.id), sidebarLayout);
+
+  const handleNewGroup = () => {
+    if (!selectedProject) return;
+    const name = window.prompt("分组名称", "新建分组")?.trim();
+    if (!name) return;
+    updateSidebarLayout((l) => { createGroup(l, `g${Date.now().toString(36)}`, name); });
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -1032,6 +1093,41 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   <path d="M3 3v5h5" />
                 </svg>
               )}
+            </button>
+            <button
+              onClick={handleNewGroup}
+              disabled={!selectedProject}
+              title="新建分组（把会话拖入可归类）"
+              aria-label="新建分组"
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "var(--bg-hover)",
+                border: "1px solid var(--border)",
+                color: selectedProject ? "var(--text-muted)" : "var(--text-dim)",
+                cursor: selectedProject ? "pointer" : "not-allowed",
+                width: 32, height: 32,
+                borderRadius: 7,
+                padding: 0,
+                flexShrink: 0,
+                transition: "background 0.12s, color 0.12s, border-color 0.12s",
+              }}
+              onMouseEnter={(e) => {
+                if (!selectedProject) return;
+                e.currentTarget.style.background = "var(--bg-selected)";
+                e.currentTarget.style.color = "var(--accent)";
+                e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "var(--bg-hover)";
+                e.currentTarget.style.color = selectedProject ? "var(--text-muted)" : "var(--text-dim)";
+                e.currentTarget.style.borderColor = "var(--border)";
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                <line x1="12" y1="11" x2="12" y2="17" />
+                <line x1="9" y1="14" x2="15" y2="14" />
+              </svg>
             </button>
           </div>
         </div>
@@ -1655,22 +1751,235 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             {t("sidebar.noSessions")}
           </div>
         )}
-        {sessionTree.map((node) => (
-          <SessionTreeItem
-            key={node.session.id}
-            node={node}
-            selectedSessionId={selectedSessionId}
-            runningSessionIds={runningSessionIds}
-            unreadSessionIds={unreadSessionIds}
-            onSelectSession={handleSelectSessionFromList}
-            onRenamed={loadSessions}
-            onSessionDeleted={(id) => {
-              onSessionDeleted?.(id);
-              loadSessions();
+        {/* 拖出分组的投放区：仅在拖拽组内会话时出现 */}
+        {dragging?.kind === "session" && dragging.fromGid && (
+          <div
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const drag = dragging;
+              updateSidebarLayout((l) => { moveTopEntry(l, `s:${drag.id}`, null, false); });
+              setDragging(null); setDropHint(null); setGroupDropId(null);
             }}
-            depth={0}
-          />
-        ))}
+            style={{ margin: "4px 8px", padding: "6px 8px", border: "1px dashed var(--accent)", borderRadius: 6, color: "var(--accent)", fontSize: 11, textAlign: "center" }}
+          >
+            移到此处移出分组
+          </div>
+        )}
+        {topEntries.map((entry) => {
+          const entryKey = entry.type === "session" ? `s:${entry.id}` : `g:${entry.id}`;
+          const hintHere = dropHint?.key === entryKey ? dropHint.before : null;
+          const topDropProps = {
+            onDragOver: (e: React.DragEvent) => {
+              if (!dragging) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              const rect = e.currentTarget.getBoundingClientRect();
+              const before = e.clientY < rect.top + rect.height / 2;
+              setDropHint({ key: entryKey, before });
+            },
+            onDragLeave: () => setDropHint((cur) => (cur?.key === entryKey ? null : cur)),
+            onDrop: (e: React.DragEvent) => {
+              e.preventDefault();
+              const drag = dragging;
+              if (!drag) return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const before = e.clientY < rect.top + rect.height / 2;
+              updateSidebarLayout((l) => {
+                moveTopEntry(l, drag.kind === "session" ? `s:${drag.id}` : `g:${drag.id}`, entryKey, before);
+              });
+              setDragging(null); setDropHint(null); setGroupDropId(null);
+            },
+          };
+          const hintBar = (show: boolean) => show ? <div style={{ height: 2, background: "var(--accent)", borderRadius: 1, margin: "0 8px" }} /> : null;
+
+          if (entry.type === "session") {
+            const node = rootNodeById.get(entry.id);
+            if (!node) return null;
+            return (
+              <div key={entryKey} {...topDropProps}>
+                {hintBar(hintHere === true)}
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    setDragging({ kind: "session", id: entry.id, fromGid: null });
+                    e.dataTransfer.setData("text/plain", entry.id);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragEnd={() => { setDragging(null); setDropHint(null); setGroupDropId(null); }}
+                >
+                  <SessionTreeItem
+                    node={node}
+                    selectedSessionId={selectedSessionId}
+                    runningSessionIds={runningSessionIds}
+                    unreadSessionIds={unreadSessionIds}
+                    onSelectSession={handleSelectSessionFromList}
+                    onRenamed={loadSessions}
+                    onSessionDeleted={(id) => {
+                      onSessionDeleted?.(id);
+                      loadSessions();
+                    }}
+                    depth={0}
+                  />
+                </div>
+                {hintBar(hintHere === false)}
+              </div>
+            );
+          }
+
+          // 分组块
+          const gid = entry.id;
+          const group = sidebarLayout.groups[gid];
+          if (!group) return null;
+          const members = groupMembers(group, sessionTree.map((n) => n.session.id));
+          const dropInto = groupDropId === gid;
+          return (
+            <div key={entryKey} {...topDropProps}>
+              {hintBar(hintHere === true)}
+              <div
+                draggable
+                onDragStart={(e) => {
+                  setDragging({ kind: "group", id: gid });
+                  e.dataTransfer.setData("text/plain", gid);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragEnd={() => { setDragging(null); setDropHint(null); setGroupDropId(null); }}
+                onDragOver={(e) => {
+                  if (!dragging) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (dragging.kind === "session") setGroupDropId(gid);
+                }}
+                onDragLeave={() => setGroupDropId((cur) => (cur === gid ? null : cur))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const drag = dragging;
+                  if (!drag) return;
+                  if (drag.kind === "session") {
+                    updateSidebarLayout((l) => {
+                      moveSessionToGroup(l, drag.id, gid);
+                      const g = l.groups[gid];
+                      if (g) g.collapsed = false;
+                    });
+                  } else if (drag.kind === "group" && dropHint?.key === entryKey) {
+                    updateSidebarLayout((l) => { moveTopEntry(l, `g:${drag.id}`, entryKey, dropHint.before); });
+                  }
+                  setDragging(null); setDropHint(null); setGroupDropId(null);
+                }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  margin: "4px 8px 0", padding: "5px 6px",
+                  borderRadius: 6,
+                  background: dropInto ? "var(--bg-selected)" : "var(--bg-panel)",
+                  border: dropInto ? "1px dashed var(--accent)" : "1px solid var(--border)",
+                  color: "var(--text-muted)", fontSize: 11, fontWeight: 600,
+                  cursor: "grab", userSelect: "none",
+                }}
+              >
+                <button
+                  type="button"
+                  aria-label={group.collapsed ? `展开分组 ${group.name}` : `收起分组 ${group.name}`}
+                  onClick={(e) => { e.stopPropagation(); updateSidebarLayout((l) => { const g = l.groups[gid]; if (g) g.collapsed = !g.collapsed; }); }}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", display: "flex" }}
+                >
+                  <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ transform: group.collapsed ? "none" : "rotate(90deg)", transition: "transform 0.15s" }}>
+                    <polyline points="3 2 7 5 3 8" />
+                  </svg>
+                </button>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={group.name}>{group.name}</span>
+                <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>{members.length}</span>
+                <button
+                  type="button"
+                  aria-label={`重命名分组 ${group.name}`}
+                  title="重命名"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const name = window.prompt("分组名称", group.name)?.trim();
+                    if (name && name !== group.name) updateSidebarLayout((l) => { const g = l.groups[gid]; if (g) g.name = name; });
+                  }}
+                  style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: "var(--text-dim)", fontSize: 11 }}
+                ></button>
+                <button
+                  type="button"
+                  aria-label={`解散分组 ${group.name}`}
+                  title="解散分组（会话回到未分组）"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm(`解散分组「${group.name}」？会话会回到未分组区域。`)) {
+                      updateSidebarLayout((l) => { deleteGroup(l, gid); });
+                    }
+                  }}
+                  style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: "var(--text-dim)", fontSize: 13 }}
+                >×</button>
+              </div>
+              {!group.collapsed && members.map((id) => {
+                const node = rootNodeById.get(id);
+                if (!node) return null;
+                const inKey = `in:${gid}:${id}`;
+                const inHint = dropHint?.key === inKey ? dropHint.before : null;
+                return (
+                  <div
+                    key={inKey}
+                    onDragOver={(e) => {
+                      if (!dragging || dragging.kind !== "session") return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setDropHint({ key: inKey, before: e.clientY < rect.top + rect.height / 2 });
+                      setGroupDropId(gid);
+                    }}
+                    onDragLeave={() => setDropHint((cur) => (cur?.key === inKey ? null : cur))}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const drag = dragging;
+                      if (!drag || drag.kind !== "session") return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const before = e.clientY < rect.top + rect.height / 2;
+                      updateSidebarLayout((l) => {
+                        if (!l.groups[gid]?.order.includes(drag.id)) moveSessionToGroup(l, drag.id, gid);
+                        moveWithinGroup(l, drag.id, gid, id, before);
+                      });
+                      setDragging(null); setDropHint(null); setGroupDropId(null);
+                    }}
+                    style={{ marginLeft: 10 }}
+                  >
+                    {hintBar(inHint === true)}
+                    <div
+                      draggable
+                      onDragStart={(e) => {
+                        setDragging({ kind: "session", id, fromGid: gid });
+                        e.dataTransfer.setData("text/plain", id);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => { setDragging(null); setDropHint(null); setGroupDropId(null); }}
+                    >
+                      <SessionTreeItem
+                        node={node}
+                        selectedSessionId={selectedSessionId}
+                        runningSessionIds={runningSessionIds}
+                        unreadSessionIds={unreadSessionIds}
+                        onSelectSession={handleSelectSessionFromList}
+                        onRenamed={loadSessions}
+                        onSessionDeleted={(sid) => {
+                          onSessionDeleted?.(sid);
+                          loadSessions();
+                        }}
+                        depth={0}
+                      />
+                    </div>
+                    {hintBar(inHint === false)}
+                  </div>
+                );
+              })}
+              {hintBar(hintHere === false)}
+            </div>
+          );
+        })}
       </div>
 
       {/* File Explorer section */}

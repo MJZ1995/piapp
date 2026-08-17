@@ -686,7 +686,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
               <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? 7 : 10, minWidth: 0, flex: 1, lineHeight: 1.4, overflow: "hidden" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- 36px 本地头像，无需 next/image 优化 */}
                 <img src="/avatar.png" alt="" style={{ width: 36, height: 36, borderRadius: 9, flexShrink: 0, alignSelf: "center" }} />
-                <span style={{ fontSize: 22, color: "var(--text)", fontWeight: 700, letterSpacing: 0, flexShrink: 0, whiteSpace: "nowrap" }}>Yasuo Agent</span>
+                <span style={{ fontSize: 22, color: "var(--text)", fontWeight: 700, letterSpacing: 0, flexShrink: 0, whiteSpace: "nowrap" }}>PiPi Agent</span>
                 <NewSessionUpdateLink label={(version) => t("appUpdate.releaseNotes", { version })} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>

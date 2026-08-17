@@ -12,15 +12,15 @@ const notoSansMono = Noto_Sans_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Yasuo Agent",
-  description: "Yasuo Agent — interface for the pi coding agent",
-  applicationName: "Yasuo Agent",
+  title: "PiPi Agent",
+  description: "PiPi Agent — interface for the pi coding agent",
+  applicationName: "PiPi Agent",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Yasuo Agent" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "PiPi Agent" },
   formatDetection: { telephone: false },
 };
 

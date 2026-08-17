@@ -104,7 +104,8 @@ function probe(port, timeoutMs = 2000) {
       res.setEncoding("utf8");
       res.on("data", (c) => { if (body.length < 128 * 1024) body += c; });
       res.on("end", () =>
-        finish(res.statusCode === 200 && (body.includes("Yasuo Agent") || body.includes("Pi Agent Web")) ? "pi-web" : "other")
+        // 品牌标记兼容新旧版本：PiPi Agent（现）/ Yasuo Agent / Pi Agent Web（旧）
+        finish(res.statusCode === 200 && (body.includes("PiPi Agent") || body.includes("Yasuo Agent") || body.includes("Pi Agent Web")) ? "pi-web" : "other")
       );
       res.on("error", () => finish("other"));
     });
@@ -145,7 +146,7 @@ async function startServer({ repoPath, nodePath, env, preferredPort, log }) {
   const state = await probe(preferredPort);
   log(`probe(${preferredPort}) = ${state}`);
   if (state === "pi-web" && await probeDesktopTerminal(preferredPort)) {
-    log(`端口 ${preferredPort} 已有 Yasuo Agent 桌面服务在运行，直接附着`);
+    log(`端口 ${preferredPort} 已有 PiPi Agent 桌面服务在运行，直接附着`);
     return { mode: "attached", port: preferredPort, pid: null };
   }
   const port = state === "free" ? preferredPort : await findFreePort();

@@ -66,7 +66,7 @@ class LanShare {
           this.bonjour = new Bonjour();
           const version = (this.manifest() || {}).version || "";
           this.published = this.bonjour.publish({
-            name: `Yasuo Agent @ ${os.hostname().replace(/\.local$/, "")}`,
+            name: `PiPi Agent @ ${os.hostname().replace(/\.local$/, "")}`,
             type: SERVICE_TYPE,
             port,
             txt: { v: version },
@@ -81,9 +81,9 @@ class LanShare {
   }
 
   stop() {
-    try { this.published && this.published.stop(); } catch { /* ignore */ }
-    try { this.bonjour && this.bonjour.destroy(); } catch { /* ignore */ }
-    try { this.server && this.server.close(); } catch { /* ignore */ }
+    try { if (this.published) this.published.stop(); } catch { /* ignore */ }
+    try { if (this.bonjour) this.bonjour.destroy(); } catch { /* ignore */ }
+    try { if (this.server) this.server.close(); } catch { /* ignore */ }
     this.server = null; this.bonjour = null; this.published = null; this.port = null; this.code = null;
     this.log("局域网更新分享已关闭");
   }

@@ -915,7 +915,7 @@ export function AppShell() {
 
   const activeFileTab = fileTabs.find((tab) => tab.id === activeFileTabId) ?? null;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
-  const windowTitle = activeCwdName ? `${activeCwdName} — Yasuo Agent` : "Yasuo Agent";
+  const windowTitle = activeCwdName ? `${activeCwdName} — PiPi Agent` : "PiPi Agent";
 
   useEffect(() => {
     const syncWindowTitle = () => {

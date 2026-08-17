@@ -237,7 +237,7 @@ if (!gotLock) {
         playFinishSound(); // 音效每次完成都播（彩蛋）；系统通知仅在窗口未聚焦时弹
         if (win.anyWindowFocused()) return;
         notifySessionFinished({
-          title: "Yasuo Agent",
+          title: "PiPi Agent",
           body: "回复完成，点击查看会话",
           onClick: () => {
             if (!win.showAllWindows()) createWindowIfReady();

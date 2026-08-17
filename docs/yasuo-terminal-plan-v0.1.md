@@ -1,10 +1,10 @@
-# Yasuo Agent 内嵌终端 Plan v0.1
+# PiPi Agent 内嵌终端 Plan v0.1
 
 > 状态：需求理解已确认；用户已明确授权 Plan 输出后直接进入开发，不再单独等待 Plan 复核，不另行编写 PRD。
 
 ## 1. 背景与目标（Why）
 
-为 Yasuo Agent 的个人用户提供可持续交互的 App 内终端，使其能够手动运行 AGY CLI、OpenCode、Kimi CLI 等 TUI 工具，并允许 Yasuo Agent 在可控权限下读取终端状态、输入内容和发送快捷键。
+为 PiPi Agent 的个人用户提供可持续交互的 App 内终端，使其能够手动运行 AGY CLI、OpenCode、Kimi CLI 等 TUI 工具，并允许 PiPi Agent 在可控权限下读取终端状态、输入内容和发送快捷键。
 
 成功口径：
 
@@ -41,12 +41,12 @@
 
 ## 3. 用户与核心场景
 
-目标用户：Yasuo Agent 的个人使用者，需要在同一工作界面内并行使用 Agent 与多个命令行 Agent。
+目标用户：PiPi Agent 的个人使用者，需要在同一工作界面内并行使用 Agent 与多个命令行 Agent。
 
 核心场景：
 
 1. 在项目目录中创建终端并手动启动 AGY、OpenCode 或 Kimi CLI。
-2. 在聊天中说“在 Kimi 终端输入……”，由 Yasuo Agent 自动发送。
+2. 在聊天中说“在 Kimi 终端输入……”，由 PiPi Agent 自动发送。
 3. 使用 `/terminal` 明确指定终端和输入内容。
 4. Agent 按需读取最近输出，判断交互式 CLI 当前状态后继续操作。
 5. 用户正在输入时，Agent 输入进入待发送队列，避免内容交错。
@@ -102,7 +102,7 @@
 - 终端能力必须限制在本机 App，不得通过局域网暴露任意命令执行接口。
 - 终端进程使用当前用户权限，不引入额外提权。
 - 不破坏上游 pi-web 的 Web 使用方式；非桌面环境应安全降级为无终端能力。
-- 保持 Yasuo Agent 品牌、深海极光主题及现有 Git 上游同步策略。
+- 保持 PiPi Agent 品牌、深海极光主题及现有 Git 上游同步策略。
 - 原生终端依赖和打包必须兼容 Apple Silicon、Electron 签名及当前安装方式。
 
 ## 8. 交付验收口径
@@ -114,4 +114,4 @@
 - 搜索、重命名、导出可用，关闭后不残留输出记录。
 - 非 Electron Web 模式不暴露终端接口。
 - TypeScript、Lint、自动化测试、生产构建和 Electron 打包通过。
-- 安装到 `/Applications/Yasuo Agent.app` 后完成真实端到端验证。
+- 安装到 `/Applications/PiPi Agent.app` 后完成真实端到端验证。

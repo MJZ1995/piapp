@@ -21,7 +21,7 @@ class AppTray {
     }
     image = image.resize({ width: 18, height: 18 });
     this.tray = new Tray(image);
-    this.tray.setToolTip("Yasuo Agent");
+    this.tray.setToolTip("PiPi Agent");
     this.tray.on("click", () => this.onToggleWindow());
     this.rebuildMenu();
   }
@@ -41,7 +41,7 @@ class AppTray {
     if (!this.tray) return;
     const launchAtLogin = app.getLoginItemSettings().openAtLogin;
     const template = [
-      { label: "显示 / 隐藏 Yasuo Agent", click: () => this.onToggleWindow() },
+      { label: "显示 / 隐藏 PiPi Agent", click: () => this.onToggleWindow() },
       { label: `运行中的会话：${this.runningCount}`, enabled: false },
       { type: "separator" },
     ];
@@ -63,7 +63,7 @@ class AppTray {
         click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
       },
       { type: "separator" },
-      { label: "退出 Yasuo Agent", click: () => this.onQuit() },
+      { label: "退出 PiPi Agent", click: () => this.onQuit() },
     );
     const menu = Menu.buildFromTemplate(template);
     this.tray.setContextMenu(menu);

@@ -1,8 +1,8 @@
-Yasuo Agent 首次打开说明
+PiPi Agent 首次打开说明
 ========================
 
-1. 把「Yasuo Agent」拖进 Applications（应用程序）文件夹。
-2. 首次打开：在应用程序里找到 Yasuo Agent，【右键 → 打开】，
+1. 把「PiPi Agent」拖进 Applications（应用程序）文件夹。
+2. 首次打开：在应用程序里找到 PiPi Agent，【右键 → 打开】，
    在弹窗中再点一次「打开」。（内部分享未做 Apple 公证，此步骤只需一次）
 3. 之后双击即可正常启动。
 

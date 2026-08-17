@@ -38,7 +38,7 @@ export function createTerminalTools(): ToolDefinition[] {
     name: "terminal_manage",
     label: "Terminal Manage",
     description: "List project terminals, or create, rename, and close a terminal. Create or close only when the user explicitly asks.",
-    promptSnippet: "Manage Yasuo Agent's persistent project terminals.",
+    promptSnippet: "Manage PiPi Agent's persistent project terminals.",
     promptGuidelines: [
       "Use terminal_manage list before targeting a terminal when its name is unclear.",
       "Create or close terminals only when the user explicitly requests it.",
@@ -84,7 +84,7 @@ export function createTerminalTools(): ToolDefinition[] {
   const read = defineTool({
     name: "terminal_read",
     label: "Terminal Read",
-    description: "Read the visible screen and recent output from a persistent Yasuo Agent terminal.",
+    description: "Read the visible screen and recent output from a persistent PiPi Agent terminal.",
     promptSnippet: "Read the current screen and recent output of a project terminal.",
     executionMode: "sequential",
     parameters: Type.Object({

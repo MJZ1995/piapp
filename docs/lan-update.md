@@ -9,7 +9,7 @@
 
 ## 同事首次安装
 
-1. 发送 `desktop/dist/Yasuo Agent-<版本>-arm64.dmg` 给同事（AirDrop/IM 均可）。
+1. 发送 `desktop/dist/PiPi Agent-<版本>-arm64.dmg` 给同事（AirDrop/IM 均可）。
 2. 同事拖入 Applications，首次【右键 → 打开】一次（未做 Apple 公证）。
 3. 打开后点左下角「Models」配置自己的模型账号。
 4. 会话/配置/记忆都在同事本机 `~/.pi`，覆盖安装或更新均不丢失。

@@ -141,7 +141,7 @@ export function createTerminal(options: {
   cols?: number;
   rows?: number;
 }): TerminalInfo {
-  if (!terminalsEnabled()) throw new Error("Terminal is available only in Yasuo Agent desktop mode");
+  if (!terminalsEnabled()) throw new Error("Terminal is available only in PiPi Agent desktop mode");
 
   const cwd = path.resolve(options.cwd);
   const projectKey = path.resolve(options.projectKey);

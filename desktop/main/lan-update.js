@@ -5,7 +5,6 @@
 
 const fs = require("fs");
 const http = require("http");
-const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
 const { app, dialog, BrowserWindow, ipcMain } = require("electron");

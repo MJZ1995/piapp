@@ -1,5 +1,5 @@
 appId: com.yasuo.piweb
-productName: Yasuo Agent
+productName: PiPi Agent
 directories:
   output: dist
 files:

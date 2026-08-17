@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!terminalsEnabled()) {
-    return NextResponse.json({ error: "Terminal is available only in Yasuo Agent desktop mode" }, { status: 404 });
+    return NextResponse.json({ error: "Terminal is available only in PiPi Agent desktop mode" }, { status: 404 });
   }
 
   let body: TerminalRequestBody;

@@ -19,8 +19,6 @@ extraResources:
   - from: update/runtime
     to: runtime
 asar: true
-asarUnpack:
-  - assets/hasagi.m4a
 dmg:
   contents:
     - x: 110

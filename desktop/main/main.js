@@ -14,7 +14,7 @@ const { AppTray } = require("./tray");
 const { LanShare } = require("./lan-share");
 const { LanUpdater } = require("./lan-update");
 const { registerToggleShortcut, unregisterAll } = require("./shortcut");
-const { RunningWatcher, notifySessionFinished, playFinishSound } = require("./notify");
+const { RunningWatcher, notifySessionFinished } = require("./notify");
 
 // 打包后 stdout 不可见，日志同时写文件：~/Library/Application Support/pi-web-desktop/desktop.log
 let logFile = null;
@@ -234,7 +234,7 @@ if (!gotLock) {
       log,
       onChange: (count) => { if (tray) tray.setRunningCount(count); },
       onSessionFinished: (sessionId) => {
-        playFinishSound(); // 音效每次完成都播（彩蛋）；系统通知仅在窗口未聚焦时弹
+        // 系统通知（macOS 默认提示音）仅在窗口未聚焦时弹出
         if (win.anyWindowFocused()) return;
         notifySessionFinished({
           title: "PiPi Agent",

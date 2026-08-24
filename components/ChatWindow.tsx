@@ -8,6 +8,9 @@ import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantB
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
+import { SubagentTabBar } from "./SubagentTabBar";
+import { SubagentView } from "./SubagentView";
+import { buildSubagentTabs } from "@/lib/subagent-tabs";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
 import { useI18n } from "@/hooks/useI18n";
@@ -196,6 +199,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     notices, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection,
     agentPhase,
+    subagentLiveDetails,
     isNew,
     sessionIdRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef, promptAnchorActive,
@@ -209,6 +213,67 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsPanelOpen,
   });
   const sessionBusy = agentRunning || bashRunning;
+
+  // --- 子 agent 会话标签 ---
+  // 标签数据从 messages 重建（会话切换/重载天然重置），实时帧来自
+  // useAgentSession 的 subagentLiveDetails；重命名/关闭/中止均为会话级状态。
+  const [activeSubagentTabId, setActiveSubagentTabId] = useState<string | null>(null);
+  const [subagentRenames, setSubagentRenames] = useState<Record<string, string>>({});
+  const [subagentAbortedIds, setSubagentAbortedIds] = useState<ReadonlySet<string>>(new Set());
+  const [closedSubagentTabIds, setClosedSubagentTabIds] = useState<ReadonlySet<string>>(new Set());
+
+  const subagentTabs = useMemo(() => (
+    buildSubagentTabs(messages, subagentLiveDetails)
+      .filter((tab) => !closedSubagentTabIds.has(tab.id))
+      .map((tab) => (
+        subagentAbortedIds.has(tab.id) && tab.status !== "done"
+          ? { ...tab, status: "aborted" as const }
+          : tab
+      ))
+  ), [messages, subagentLiveDetails, closedSubagentTabIds, subagentAbortedIds]);
+
+  const activeSubagentTab = subagentTabs.find((tab) => tab.id === activeSubagentTabId) ?? null;
+
+  const closeSubagentTab = (id: string) => {
+    const tab = subagentTabs.find((candidate) => candidate.id === id);
+    if (!tab) return;
+    if (tab.status === "running") {
+      // 中止整个工具调用：同一 toolCallId 下的运行中标签一并标记
+      const runningSiblingIds = subagentTabs
+        .filter((candidate) => candidate.toolCallId === tab.toolCallId && candidate.status === "running")
+        .map((candidate) => candidate.id);
+      setSubagentAbortedIds((prev) => {
+        const next = new Set(prev);
+        for (const siblingId of [id, ...runningSiblingIds]) next.add(siblingId);
+        return next;
+      });
+      void fetch("/api/subagent-abort", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toolCallId: tab.toolCallId,
+          sessionId: session?.id ?? sessionIdRef.current ?? undefined,
+        }),
+      }).catch(() => {});
+    } else {
+      setClosedSubagentTabIds((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+    }
+    if (activeSubagentTabId === id) setActiveSubagentTabId(null);
+  };
+
+  const renameSubagentTab = (id: string, label: string) => {
+    setSubagentRenames((prev) => {
+      const next = { ...prev };
+      const trimmed = label.trim();
+      if (trimmed) next[id] = trimmed;
+      else delete next[id];
+      return next;
+    });
+  };
 
   // Register the abort handler for the global Esc shortcut
   useEffect(() => {
@@ -836,10 +901,52 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
             onRevealHistory={revealHistoryForMinimap}
           />
         )}
+        {activeSubagentTab && (
+          <SubagentView
+            tab={activeSubagentTab}
+            label={subagentRenames[activeSubagentTab.id] ?? activeSubagentTab.label}
+            cwd={messageCwd}
+            onOpenFile={onOpenFile}
+          />
+        )}
       </div>
 
       <div className="relative">
-        {chatInputElement}
+        {subagentTabs.length > 0 && (
+          <SubagentTabBar
+            tabs={subagentTabs}
+            activeId={activeSubagentTab?.id ?? null}
+            renamedLabels={subagentRenames}
+            onSelect={setActiveSubagentTabId}
+            onClose={closeSubagentTab}
+            onRename={renameSubagentTab}
+          />
+        )}
+        {activeSubagentTab ? (
+          <div
+            style={{
+              flexShrink: 0,
+              padding: "0 16px 8px",
+              paddingRight: isMobile ? 16 : 52, // 与 ChatInput 对齐
+            }}
+          >
+            <div
+              style={{
+                maxWidth: 820,
+                margin: "0 auto",
+                border: "1px dashed var(--border)",
+                borderRadius: 12,
+                background: "var(--bg-panel)",
+                color: "var(--text-muted)",
+                fontSize: 13,
+                padding: "14px 16px",
+                textAlign: "center",
+              }}
+            >
+              {t("subagent.readonlyInput")}
+            </div>
+          </div>
+        ) : chatInputElement}
         <ExtensionStatusBar statuses={extensionStatuses} widgets={extensionWidgets} />
       </div>
       </>

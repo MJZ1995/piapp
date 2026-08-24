@@ -21,6 +21,7 @@ import type { SessionStatsInfo } from "@/lib/pi-types";
 import { userMessageKey } from "@/lib/prompt-recovery";
 import { AgentEventConnection } from "@/lib/agent-event-connection";
 import { getToolExecutionProgress } from "@/lib/tool-execution-progress";
+import { normalizeSubagentDetails, type SubagentDetails } from "@/lib/subagent-tabs";
 import {
   CHAT_SCROLL_REATTACH_TOLERANCE,
   CHAT_SCROLL_TAIL_TOLERANCE,
@@ -300,6 +301,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [compactError, setCompactError] = useState<string | null>(null);
   const [compactResult, setCompactResult] = useState<CompactResultInfo | null>(null);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
+  const [subagentLiveDetails, setSubagentLiveDetails] = useState<Map<string, SubagentDetails>>(new Map());
   const [promptAnchorActive, setPromptAnchorActive] = useState(false);
   const [slashCommands, setSlashCommands] = useState<SlashCommandInfo[]>([]);
   const [slashCommandsLoading, setSlashCommandsLoading] = useState(false);
@@ -1190,6 +1192,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const id = event.toolCallId as string;
         const name = event.toolName as string;
         const progress = getToolExecutionProgress(event.partialResult);
+        // subagent 工具运行中的结构化进度（parallel 多项 / chain 逐步增多）
+        const subagentDetails = normalizeSubagentDetails(
+          (event.partialResult as { details?: unknown } | undefined)?.details,
+        );
+        if (subagentDetails) {
+          setSubagentLiveDetails((prev) => {
+            const next = new Map(prev);
+            next.set(id, subagentDetails);
+            return next;
+          });
+        }
         setAgentPhase((prev) => {
           const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
           const existing = tools.find((tool) => tool.id === id);
@@ -1930,6 +1943,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     notices: noticeState.visible, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection: isNew && newSessionModel === null,
     agentPhase,
+    subagentLiveDetails,
     isNew,
     promptAnchorActive,
     // Refs

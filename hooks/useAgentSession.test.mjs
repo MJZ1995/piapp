@@ -301,16 +301,6 @@ test("shows the latest streamed tool execution progress in the running phase", (
   assert.match(chatWindowSource, /chat\.runningNamedTool[\s\S]*latest\.progress/);
 });
 
-test("plays the enabled sound once for each extension dialog", () => {
-  assert.match(chatWindowSource, /soundedExtensionDialogIdRef = useRef<string \| null>\(null\)/);
-  assert.match(
-    chatWindowSource,
-    /soundedExtensionDialogIdRef\.current === extensionDialog\.id/,
-  );
-  assert.match(chatWindowSource, /soundedExtensionDialogIdRef\.current = extensionDialog\.id/);
-  assert.match(chatWindowSource, /playDoneSoundRef\.current\(\)/);
-});
-
 test("routes blocking extension requests through deduplicated browser attention notifications", () => {
   const completionSource = appShellSource.slice(
     appShellSource.indexOf("  const handleAgentEnd = useCallback"),

@@ -19,12 +19,12 @@ function getBrowserStorage(): StorageLike | null {
 export function getPreferredToolPreset(
   storage: StorageLike | null = getBrowserStorage(),
 ): ToolPreset {
-  if (!storage) return "default";
+  if (!storage) return "full";
   try {
     const value = storage.getItem(STORAGE_KEY);
-    return isToolPreset(value) ? value : "default";
+    return isToolPreset(value) ? value : "full";
   } catch {
-    return "default";
+    return "full";
   }
 }
 

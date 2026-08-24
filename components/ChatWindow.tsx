@@ -15,7 +15,6 @@ import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAg
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import type { SessionStatsInfo } from "@/lib/pi-types";
-import type { AppUpdateResponse } from "@/lib/api-types";
 import {
   captureScrollDistance,
   getNextVisibleCount,
@@ -43,15 +42,6 @@ interface Props {
   onSessionStatsPanelOpen?: () => void;
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;
   onOpenFile?: (filePath: string) => void;
-  terminalAvailable?: boolean;
-  terminalOpen?: boolean;
-  onTerminalToggle?: () => void;
-  /** Completion sound state + controls, owned by AppShell so tasks finishing in
-   *  a non-active workspace can still ring. */
-  soundEnabled?: boolean;
-  onSoundToggle?: () => void;
-  playDoneSound?: () => void;
-  unlockAudio?: () => void;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
@@ -73,71 +63,6 @@ function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, 
 
 const CHAT_MINIMAP_WIDTH = 36;
 const CHAT_COLUMN_PADDING = 16;
-
-function NewSessionUpdateLink({
-  label,
-}: {
-  label: (version: string) => string;
-}) {
-  const [update, setUpdate] = useState<AppUpdateResponse | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void fetch("/api/app-update", { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return response.json() as Promise<AppUpdateResponse>;
-      })
-      .then((result) => {
-        if (result?.updateAvailable && result.latestVersion && result.releaseUrl) {
-          setUpdate(result);
-        }
-      })
-      .catch(() => {
-        // Update checks are best-effort and must not interrupt a new session.
-      });
-    return () => controller.abort();
-  }, []);
-
-  if (!update) return null;
-  const accessibleLabel = label(update.latestVersion);
-
-  return (
-    <a
-      href={update.releaseUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={accessibleLabel}
-      aria-label={accessibleLabel}
-      onMouseEnter={(event) => { event.currentTarget.style.background = "var(--bg-hover)"; }}
-      onMouseLeave={(event) => { event.currentTarget.style.background = "transparent"; }}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        alignSelf: "center",
-        gap: 3,
-        minHeight: 32,
-        minWidth: 0,
-        padding: "0 4px",
-        background: "transparent",
-        borderRadius: 5,
-        color: "var(--accent)",
-        fontSize: 12,
-        fontWeight: 600,
-        lineHeight: 1.2,
-        textDecoration: "none",
-        transition: "background 0.12s",
-        whiteSpace: "nowrap",
-      }}
-    >
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>v{update.latestVersion}</span>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
-        <path d="M7 17 17 7" />
-        <path d="M7 7h10v10" />
-      </svg>
-    </a>
-  );
-}
 
 function hasFinalAssistantAnswer(message: AgentMessage): boolean {
   if (message.role !== "assistant") return false;
@@ -253,25 +178,9 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
   );
 }
 
-export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio, terminalAvailable, terminalOpen, onTerminalToggle }: Props) {
+export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
-
-  // Wrap onAgentEnd to play the completion sound. This is more reliable than
-  // wrapping handleAgentEventRef because useAgentSession overwrites that ref
-  // on every render (it syncs the latest callback), which would blow away an
-  // externally-installed wrapper after the first re-render.
-  const playDoneSoundRef = useRef(playDoneSound);
-  playDoneSoundRef.current = playDoneSound;
-  const soundEnabledRef = useRef(soundEnabled);
-  soundEnabledRef.current = soundEnabled;
-  const soundedExtensionDialogIdRef = useRef<string | null>(null);
-  const wrappedOnAgentEnd = useCallback(() => {
-    if (soundEnabledRef.current) {
-      playDoneSoundRef.current();
-    }
-    onAgentEnd?.();
-  }, [onAgentEnd]);
 
   // 稳定化 onEditContent 引用，配合 React.memo 防止历史消息重渲染
   const handleEditContent = useCallback((message: UserMessage) => {
@@ -296,16 +205,10 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     handleBuiltinSlashCommand,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands, scrollUserMsgToTop,
   } = useAgentSession({
-    session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
+    session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsPanelOpen,
   });
   const sessionBusy = agentRunning || bashRunning;
-
-  useEffect(() => {
-    if (!extensionDialog || soundedExtensionDialogIdRef.current === extensionDialog.id) return;
-    soundedExtensionDialogIdRef.current = extensionDialog.id;
-    playDoneSoundRef.current();
-  }, [extensionDialog]);
 
   // Register the abort handler for the global Esc shortcut
   useEffect(() => {
@@ -570,14 +473,8 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
       slashCommandsLoading={slashCommandsLoading}
       onLoadSlashCommands={loadSlashCommands}
       onBuiltinCommand={handleBuiltinSlashCommand}
-      soundEnabled={soundEnabled}
-      onSoundToggle={onSoundToggle}
-      onAudioUnlock={unlockAudio}
       draftKey={session?.id ?? newSessionDraftKey ?? undefined}
       cwd={session?.cwd ?? newSessionCwd}
-      terminalAvailable={terminalAvailable}
-      terminalOpen={terminalOpen}
-      onTerminalToggle={onTerminalToggle}
     />
   );
 
@@ -672,30 +569,32 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
         <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8">
           <div className="w-full max-w-[820px]">
             <div
-              className="mb-3"
               style={{
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                marginLeft: 16,
-                marginRight: isMobile ? 16 : 52,
-                fontFamily: "var(--font-mono)",
+                gap: 14,
+                marginBottom: 28,
               }}
             >
-              <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? 7 : 10, minWidth: 0, flex: 1, lineHeight: 1.4, overflow: "hidden" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element -- 36px 本地头像，无需 next/image 优化 */}
-                <img src="/avatar.png" alt="" style={{ width: 36, height: 36, borderRadius: 9, flexShrink: 0, alignSelf: "center" }} />
-                <span style={{ fontSize: 22, color: "var(--text)", fontWeight: 700, letterSpacing: 0, flexShrink: 0, whiteSpace: "nowrap" }}>PiPi Agent</span>
-                <NewSessionUpdateLink label={(version) => t("appUpdate.releaseNotes", { version })} />
+              <div
+                style={{
+                  width: 76,
+                  height: 76,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "1px solid color-mix(in srgb, var(--border) 55%, transparent)",
+                  boxShadow: "0 2px 6px rgba(15,23,42,0.08), 0 16px 36px -14px rgba(15,23,42,0.25)",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- 本地头像，无需 next/image 优化 */}
+                <img src="/avatar.png" alt="" style={{ width: 56, height: 56, borderRadius: "50%" }} />
               </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  web <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
-                </span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  pi <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}</span>
-                </span>
+              <div style={{ fontSize: isMobile ? 24 : 28, color: "var(--text)", fontWeight: 700, letterSpacing: "-0.01em", textAlign: "center", lineHeight: 1.35 }}>
+                {t("chat.emptyGreeting")}
               </div>
             </div>
             {chatInputElement}

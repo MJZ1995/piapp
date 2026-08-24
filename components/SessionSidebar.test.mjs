@@ -61,7 +61,6 @@ test("manual and lifecycle refreshes bypass the server session-list cache", () =
   assert.match(source, /cache: "no-store"/);
   assert.match(source, /loadSessions\(isFirst, !isFirst\)/);
   assert.match(source, /onClick=\{\(\) => loadSessions\(false, true\)\}/);
-  assert.match(source, /loadSessions\(false, true\);[\s\S]*?onBackgroundTaskDone/);
 });
 
 test("does not expose disk-backed actions for transient sessions", () => {

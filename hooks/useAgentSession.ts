@@ -287,7 +287,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
   const [newSessionModel, setNewSessionModel] = useState<SelectedModel | null>(null);
   const [newSessionDefaultModel, setNewSessionDefaultModel] = useState<SelectedModel | null>(null);
-  const [toolPreset, setToolPreset] = useState<ToolPreset>("default");
+  const [toolPreset, setToolPreset] = useState<ToolPreset>("full");
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
@@ -1566,20 +1566,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     };
 
     try {
-      if (commandName === "terminal") {
-        const cwd = session?.cwd ?? newSessionCwd;
-        if (!cwd) return complete({ handled: true, error: "请先选择项目目录" });
-        if (!args) return complete({ handled: true, error: "用法：/terminal [终端名称] <输入内容>" });
-        const response = await fetch("/api/terminals", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "command", cwd, args }),
-        });
-        const data = await response.json().catch(() => ({})) as { terminal?: { name?: string }; error?: string };
-        if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
-        return complete({ handled: true, message: `已发送到 ${data.terminal?.name ?? "当前终端"}` });
-      }
-
       const sid = sessionIdRef.current ?? await ensureNewSession();
       switch (commandName) {
         case "compact": {
@@ -1643,7 +1629,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (commandName === "compact") setIsCompacting(false);
     }
-  }, [addNotice, ensureNewSession, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, newSessionCwd, promoteNewSession, onSessionStatsPanelOpen, session?.cwd]);
+  }, [addNotice, ensureNewSession, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, promoteNewSession, onSessionStatsPanelOpen]);
 
   // Let AgentSession.prompt decide atomically whether to queue against the
   // current run or start a new turn if it settled while the request was in

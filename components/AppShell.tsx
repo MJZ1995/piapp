@@ -13,13 +13,11 @@ import { SkillsConfig } from "./SkillsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { BranchNavigator } from "./BranchNavigator";
-import { TerminalPanel } from "./TerminalPanel";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
-import { useAudio } from "@/hooks/useAudio";
 import { copyText } from "@/lib/clipboard";
 import { getFileName, normalizeFilePathSlashes } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
@@ -66,20 +64,13 @@ export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [initialNavigation] = useState(() => getInitialNavigation(searchParams));
-  const { preference, isDark, toggleTheme } = useTheme();
+  const { preference, toggleTheme } = useTheme();
   const themeLabelKey =
     preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
   const { locale, setLocale, t: translate, supportedLocales } = useI18n();
   const isMobile = useIsMobile();
   useViewportHeight();
-  // Audio ownership lives here (not in ChatWindow) so the completion tone can
-  // also fire for tasks finishing in a non-active workspace whose ChatWindow
-  // is not mounted. ChatWindow receives the audio callbacks as props.
-  const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio, soundEnabledRef } = useAudio();
   const notifiedAttentionRequestIdsRef = useRef(new Set<string>());
-  const handleBackgroundTaskDone = useCallback(() => {
-    if (soundEnabledRef.current) playDoneSound();
-  }, [playDoneSound, soundEnabledRef]);
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const handleRunningSessionIdsChange = useCallback((ids: Set<string>) => {
@@ -103,8 +94,6 @@ export function AppShell() {
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [pluginsConfigOpen, setPluginsConfigOpen] = useState(false);
-  const [terminalOpen, setTerminalOpen] = useState(false);
-  const [terminalAvailable, setTerminalAvailable] = useState(false);
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
   const [projectTrustDialogOpen, setProjectTrustDialogOpen] = useState(false);
   const [projectTrustBusy, setProjectTrustBusy] = useState(false);
@@ -947,7 +936,6 @@ export function AppShell() {
         onExplorerRefresh={handleExplorerRefresh}
         onAtMention={handleAtMention}
         onAtMentions={handleAtMentions}
-        onBackgroundTaskDone={handleBackgroundTaskDone}
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
       />
       <div style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
@@ -2127,13 +2115,6 @@ export function AppShell() {
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
               onOpenFile={handleOpenLinkedFile}
-              terminalAvailable={terminalAvailable}
-              terminalOpen={terminalOpen}
-              onTerminalToggle={() => setTerminalOpen((open) => !open)}
-              soundEnabled={soundEnabled}
-              onSoundToggle={onSoundToggle}
-              playDoneSound={playDoneSound}
-              unlockAudio={unlockAudio}
             />
           ) : initialCwdStatus === "validating" ? (
             <div
@@ -2177,13 +2158,6 @@ export function AppShell() {
             )
           ) : null}
         </div>
-        <TerminalPanel
-          cwd={activeCwd ?? selectedSession?.cwd ?? newSessionCwd ?? null}
-          isDark={isDark}
-          open={terminalOpen}
-          onOpenChange={setTerminalOpen}
-          onEnabledChange={setTerminalAvailable}
-        />
       </div>
 
       <div

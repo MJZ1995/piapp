@@ -61,7 +61,7 @@ test("keeps the model selector visible when a model error leaves no options", ()
   assert.match(html, /title="No available models"/);
 });
 
-test("renders the read-only tool preset as the active selection", () => {
+test("exposes the tool preset via the session settings menu only", () => {
   const html = renderToStaticMarkup(
     React.createElement(
       I18nProvider,
@@ -76,8 +76,8 @@ test("renders the read-only tool preset as the active selection", () => {
     ),
   );
 
-  assert.match(html, /title="Change tool preset: read-only"/);
-  assert.match(html, />read-only<\/span>/);
+  assert.match(html, /title="Session settings"/);
+  assert.doesNotMatch(html, /Change tool preset/);
 });
 
 test("shows and locks the optimistic model while a switch is pending", () => {

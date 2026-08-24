@@ -25,8 +25,6 @@ import type {
   SessionMessageEntry,
 } from "./types";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS, type HeadlessCustomUiTui } from "./custom-ui-terminal";
-import { createTerminalTools } from "./terminal-tools";
-import { terminalsEnabled } from "./terminal-manager";
 
 // ============================================================================
 // Types
@@ -1651,7 +1649,6 @@ export async function startRpcSession(
       ...(initial.thinkingLevel ? { thinkingLevel: initial.thinkingLevel } : {}),
       ...(initial.scopedModels.length > 0 ? { scopedModels: initial.scopedModels } : {}),
       ...(toolsOption !== undefined ? { tools: toolsOption } : {}),
-      ...(terminalsEnabled() ? { customTools: createTerminalTools() } : {}),
     });
 
     const persistedPreferences = await persistExplicitStartupPreferences(

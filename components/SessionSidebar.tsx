@@ -112,7 +112,6 @@ interface Props {
   onAtMentions?: (relativePaths: string[]) => void;
   /** Fired when a session that is not currently selected finishes running.
    *  Lets the app play a cross-workspace completion tone. */
-  onBackgroundTaskDone?: () => void;
   onRunningSessionIdsChange?: (ids: Set<string>) => void;
 }
 
@@ -404,7 +403,7 @@ function PiWebTitle() {
   );
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, onFileDeleted, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, onBackgroundTaskDone, onRunningSessionIdsChange }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, onFileDeleted, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, onRunningSessionIdsChange }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -594,12 +593,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     if (completedInBackground.length > 0 || hasUnlistedRunningSession) {
       loadSessions(false, true);
     }
-    if (completedInBackground.length > 0) {
-      onBackgroundTaskDone?.();
-    }
 
     previousRunningSessionIdsRef.current = runningSessionIds;
-  }, [runningSessionIds, selectedSessionId, allSessions, loadSessions, onBackgroundTaskDone]);
+  }, [runningSessionIds, selectedSessionId, allSessions, loadSessions]);
 
   useEffect(() => {
     if (!selectedSessionId) return;

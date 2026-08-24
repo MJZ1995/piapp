@@ -7,7 +7,6 @@ export const SLASH_DESCRIPTION_ZH: Record<string, string> = {
   // ─── 技能（来源：~/.pi/agent/skills/*/SKILL.md 的 description） ───
   "skill:brave-search": "网页搜索与内容提取（Brave Search API）。查文档、查事实或任意网页内容，轻量无需浏览器。",
   "skill:browser-tools": "交互式浏览器自动化（Chrome DevTools Protocol）。需要操作网页、测试前端或可见浏览器交互时使用。",
-  "skill:transcribe": "Apple Silicon Mac 本地语音转文字。直接支持 wav，其他音频格式经 ffmpeg 转换。",
 
   // ─── ponytail（npm:@dietrichgebert/ponytail；skill: 与命令两种形态都会出现） ───
   "skill:ponytail": "强制采用「能跑就行」的最简方案：代码最少、成本最低。资深工程师的克制人格。",

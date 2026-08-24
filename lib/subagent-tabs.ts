@@ -123,10 +123,11 @@ function normalizeTaskParam(value: unknown): SubagentTaskParam | null {
 /** 从 subagent 工具调用的 input/arguments 中读取任务参数。 */
 export function readSubagentParams(input: unknown): SubagentParams {
   if (!isRecord(input)) return { isMulti: false, tasks: [] };
-  if (Array.isArray(input.tasks)) {
+  const multi = Array.isArray(input.tasks) ? input.tasks : Array.isArray(input.chain) ? input.chain : null;
+  if (multi) {
     return {
       isMulti: true,
-      tasks: input.tasks
+      tasks: multi
         .map(normalizeTaskParam)
         .filter((task): task is SubagentTaskParam => task !== null),
     };
@@ -221,9 +222,26 @@ export function buildSubagentTabs(
       seen.add(toolCallId);
       const input = isRecord(block.input) ? block.input : (isRecord(block.arguments) ? block.arguments : null);
       const params = readSubagentParams(input);
-      const details = normalizeSubagentDetails(toolResults.get(toolCallId)?.details)
+      const finalResult = toolResults.get(toolCallId);
+      let details = normalizeSubagentDetails(finalResult?.details)
         ?? liveDetails.get(toolCallId)
         ?? null;
+      if (!details && finalResult) {
+        // 有最终 toolResult 但无 details（如 Esc 中止整个 run）：标记为错误，
+        // 避免标签永久停在「运行中」。
+        details = {
+          mode: "single",
+          results: [{
+            agent: params.tasks[0]?.agent ?? "subagent",
+            task: params.tasks[0]?.task ?? "",
+            exitCode: 1,
+            messages: [],
+            stderr: "",
+            usage: { ...EMPTY_USAGE },
+            errorMessage: "tool result missing details (run aborted?)",
+          }],
+        };
+      }
       tabs.push(...tabsForCall(toolCallId, params, details));
     }
   }

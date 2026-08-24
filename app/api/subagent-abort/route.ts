@@ -10,7 +10,9 @@ import path from "node:path";
 // ~/.pi/agent/subagent-running.json，进程退出时移除。这里按 toolCallId
 // 找到 pid 并 SIGTERM（2s 后仍存活补 SIGKILL）。
 
-const REGISTRY_PATH = path.join(os.homedir(), ".pi", "agent", "subagent-running.json");
+const AGENT_DIR = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
+const REGISTRY_PATH = path.join(AGENT_DIR, "subagent-running.json");
+const CANCELLED_PATH = path.join(AGENT_DIR, "subagent-cancelled.json");
 
 interface RegistryEntry {
   pid: number;
@@ -46,6 +48,24 @@ function isAlive(pid: number): boolean {
   }
 }
 
+// 记录取消标记：扩展在每次 spawn 前检查，排队/后续任务不再启动（中止闭环）
+function markCancelled(toolCallId: string): void {
+  let list: { toolCallId: string; at: number }[] = [];
+  try {
+    const data = JSON.parse(fs.readFileSync(CANCELLED_PATH, "utf8"));
+    if (Array.isArray(data)) list = data;
+  } catch {
+    /* ignore */
+  }
+  const fresh = list.filter((e) => typeof e?.at === "number" && Date.now() - e.at < 3600_000);
+  if (!fresh.some((e) => e.toolCallId === toolCallId)) fresh.push({ toolCallId, at: Date.now() });
+  try {
+    fs.writeFileSync(CANCELLED_PATH, JSON.stringify(fresh));
+  } catch {
+    /* ignore */
+  }
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function POST(req: Request) {
@@ -62,10 +82,12 @@ export async function POST(req: Request) {
 
   const entries = readRegistry();
   const targets = entries.filter((e) => e.toolCallId === toolCallId && isAlive(e.pid));
+  // 无论当前是否有存活进程都写取消标记：排队的并行任务/chain 后续步骤会被拦下
+  markCancelled(toolCallId);
   if (targets.length === 0) {
     // 顺手清理 pid 已失效的陈旧条目
     writeRegistry(entries.filter((e) => isAlive(e.pid)));
-    return NextResponse.json({ ok: false, error: "no running subagent" }, { status: 404 });
+    return NextResponse.json({ ok: true, killed: 0, cancelled: true });
   }
 
   for (const t of targets) {
@@ -85,10 +107,11 @@ export async function POST(req: Request) {
         /* ignore */
       }
     }
-    killed++;
+    if (!isAlive(t.pid)) killed++;
   }
 
+  // ponytail: read-modify-write without lock, concurrent writers may drop one entry
   const deadPids = new Set(targets.map((t) => t.pid));
   writeRegistry(readRegistry().filter((e) => !deadPids.has(e.pid) && isAlive(e.pid)));
-  return NextResponse.json({ ok: true, killed });
+  return NextResponse.json({ ok: true, killed, cancelled: true });
 }

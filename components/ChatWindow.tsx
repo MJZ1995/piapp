@@ -196,7 +196,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, modelSwitching, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
-    notices, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
+    notices, dismissNotice, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection,
     agentPhase,
     subagentLiveDetails,
@@ -627,7 +627,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
           pointerEvents: "none",
         }}
       >
-        <NoticeShelf notices={notices} floating />
+        <NoticeShelf notices={notices} floating onDismiss={dismissNotice} />
       </div>
 
       {isEmptyNew ? (
@@ -955,7 +955,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
   );
 }
 
-function NoticeShelf({ notices, floating = false }: { notices: NoticeItem[]; floating?: boolean }) {
+function NoticeShelf({ notices, floating = false, onDismiss }: { notices: NoticeItem[]; floating?: boolean; onDismiss?: (id: string) => void }) {
   if (notices.length === 0) return null;
   return (
     <div
@@ -1017,6 +1017,25 @@ function NoticeShelf({ notices, floating = false }: { notices: NoticeItem[]; flo
             <span style={{ padding: "14px 0", minWidth: 0, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {notice.message}
             </span>
+            {onDismiss && (
+              <button
+                type="button"
+                onClick={() => onDismiss(notice.id)}
+                aria-label="关闭通知"
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 24, height: 24, padding: 0, flexShrink: 0,
+                  background: "none", border: "none", borderRadius: 6,
+                  color: "var(--text-dim)", cursor: "pointer", pointerEvents: "auto",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+                  <line x1="2" y1="2" x2="10" y2="10" /><line x1="10" y1="2" x2="2" y2="10" />
+                </svg>
+              </button>
+            )}
           </div>
         );
       })}

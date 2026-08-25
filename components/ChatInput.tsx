@@ -316,7 +316,7 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
   );
 }
 
-function ModelNoticeBanner({ tone, title, body }: { tone: "error" | "warning"; title: string; body: string }) {
+function ModelNoticeBanner({ tone, title, body, onDismiss }: { tone: "error" | "warning"; title: string; body: string; onDismiss?: () => void }) {
   const color = tone === "error" ? "239,68,68" : "234,179,8";
   return (
     <div
@@ -357,6 +357,25 @@ function ModelNoticeBanner({ tone, title, body }: { tone: "error" | "warning"; t
         <div style={{ fontWeight: 600 }}>{title}</div>
         <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{body}</div>
       </div>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="关闭提示"
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 18, height: 18, padding: 0, marginLeft: "auto", flexShrink: 0,
+            background: "none", border: "none", borderRadius: 4,
+            color: "inherit", cursor: "pointer", opacity: 0.7,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.7"; }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+            <line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
@@ -435,12 +454,17 @@ export function ModelErrorBanner({ error }: { error?: string | null }) {
 
 /** Surfaces `enabledModels` patterns that matched nothing, so a typo is visible (#307). */
 export function ModelScopeWarningBanner({ warnings }: { warnings?: string[] }) {
+  // 关闭后仅对当前内容生效：警告内容变化（新的 scope 问题）会再次显示
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   if (!warnings || warnings.length === 0) return null;
+  const key = warnings.join("\n");
+  if (dismissedKey === key) return null;
   return (
     <ModelNoticeBanner
       tone="warning"
       title={warnings.length > 1 ? "Model scope warnings" : "Model scope warning"}
-      body={warnings.join("\n")}
+      body={key}
+      onDismiss={() => setDismissedKey(key)}
     />
   );
 }

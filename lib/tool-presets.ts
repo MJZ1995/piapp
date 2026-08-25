@@ -31,7 +31,11 @@ export function getPresetFromTools(tools: ToolEntry[]): ToolPreset {
   if (active === [...PRESET_READ_ONLY].sort().join(",")) return "read-only";
   if (active === [...PRESET_DEFAULT].sort().join(",")) return "default";
   if (active === [...PRESET_FULL].sort().join(",")) return "full";
-  return "default";
+  // 非标准组合（如仅扩展工具激活）：按内置工具覆盖度取最近档位
+  const set = new Set(active ? active.split(",") : []);
+  if (set.has("bash") && set.has("edit") && set.has("write")) return "full";
+  if (set.has("bash")) return "default";
+  return set.size > 0 ? "read-only" : "none";
 }
 
 export function getToolNamesForPreset(preset: ToolPreset): string[] {

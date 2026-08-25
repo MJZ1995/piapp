@@ -224,6 +224,8 @@ export const enLocale: LocalePlugin = {
     "chat.mcpToggleHint": "Applies to new sessions",
     "chat.loading": "Loading…",
     "chat.noSkills": "No skills available",
+    "chat.voiceError": "Voice transcription failed, please try again",
+    "chat.voiceUnsupported": "Microphone unavailable in this environment",
     "chat.previewImage": "Preview image",
     "chat.filterModels": "Filter models…",
     "chat.noMatchingModels": "No matching models",

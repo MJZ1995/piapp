@@ -5,16 +5,33 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Voice input: browser MediaRecorder audio → local transcription.
-// Primary: whisper-cli (brew install whisper-cpp) with a local GGUF model.
+// Voice input: browser MediaRecorder audio → local whisper-cli transcription.
 const execFileAsync = promisify(execFile);
-const WHISPER_CLI = "/opt/homebrew/bin/whisper-cli";
 const WHISPER_MODEL = path.join(os.homedir(), "models", "whisper", "ggml-large-v3-turbo-q5_0.bin");
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
+// Resolve a binary by env override → PATH → common brew prefixes (the desktop
+// app spawns this server without a shell PATH).
+function findBin(name: string, envVar: string): string | null {
+  const override = process.env[envVar];
+  if (override && fs.existsSync(override)) return override;
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (!dir) continue;
+    const p = path.join(dir, name);
+    if (fs.existsSync(p)) return p;
+  }
+  for (const dir of ["/opt/homebrew/bin", "/usr/local/bin"]) {
+    const p = path.join(dir, name);
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 export async function POST(req: Request) {
-  if (!fs.existsSync(WHISPER_CLI) || !fs.existsSync(WHISPER_MODEL)) {
-    return NextResponse.json({ error: "whisper not installed" }, { status: 503 });
+  const whisper = findBin("whisper-cli", "WHISPER_CLI_PATH");
+  const ffmpeg = findBin("ffmpeg", "FFMPEG_PATH");
+  if (!whisper || !ffmpeg || !fs.existsSync(WHISPER_MODEL)) {
+    return NextResponse.json({ error: "whisper not installed (whisper-cli/ffmpeg/model missing)" }, { status: 503 });
   }
   const buf = Buffer.from(await req.arrayBuffer());
   if (buf.length === 0) return NextResponse.json({ error: "empty audio" }, { status: 400 });
@@ -26,8 +43,9 @@ export async function POST(req: Request) {
   try {
     fs.writeFileSync(input, buf);
     // Browser records webm/opus; whisper-cli wants 16kHz mono WAV.
-    await execFileAsync("/opt/homebrew/bin/ffmpeg", ["-y", "-loglevel", "error", "-i", input, "-ac", "1", "-ar", "16000", wav], { timeout: 30_000 });
-    const { stdout } = await execFileAsync(WHISPER_CLI, ["-m", WHISPER_MODEL, "-l", "zh", "--no-prints", "-nt", wav], {
+    await execFileAsync(ffmpeg, ["-y", "-loglevel", "error", "-i", input, "-ac", "1", "-ar", "16000", wav], { timeout: 30_000 });
+    // No -l flag: whisper auto-detects the spoken language.
+    const { stdout } = await execFileAsync(whisper, ["-m", WHISPER_MODEL, "--no-prints", "-nt", wav], {
       timeout: 120_000,
       maxBuffer: 16 * 1024 * 1024,
     });

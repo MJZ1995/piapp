@@ -224,6 +224,8 @@ export const zhCNLocale: LocalePlugin = {
     "chat.mcpToggleHint": "切换后新会话生效",
     "chat.loading": "加载中…",
     "chat.noSkills": "无可用技能",
+    "chat.voiceError": "语音转写失败，请重试",
+    "chat.voiceUnsupported": "当前环境不支持麦克风",
     "chat.previewImage": "预览图片",
     "chat.filterModels": "筛选模型…",
     "chat.noMatchingModels": "没有匹配的模型",

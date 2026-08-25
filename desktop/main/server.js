@@ -114,14 +114,14 @@ function probe(port, timeoutMs = 2000) {
   });
 }
 
-function probeDesktopTerminal(port, timeoutMs = 2000) {
+function probeDesktopService(port, timeoutMs = 2000) {
   return new Promise((resolve) => {
-    const req = http.get({ host: "127.0.0.1", port, path: "/api/terminals", timeout: timeoutMs }, (res) => {
+    const req = http.get({ host: "127.0.0.1", port, path: "/api/desktop/ping", timeout: timeoutMs }, (res) => {
       let body = "";
       res.setEncoding("utf8");
       res.on("data", (chunk) => { if (body.length < 8192) body += chunk; });
       res.on("end", () => {
-        try { resolve(res.statusCode === 200 && JSON.parse(body).enabled === true); }
+        try { resolve(res.statusCode === 200 && JSON.parse(body).ok === true); }
         catch { resolve(false); }
       });
     });
@@ -145,12 +145,12 @@ function findFreePort() {
 async function startServer({ repoPath, nodePath, env, preferredPort, log }) {
   const state = await probe(preferredPort);
   log(`probe(${preferredPort}) = ${state}`);
-  if (state === "pi-web" && await probeDesktopTerminal(preferredPort)) {
+  if (state === "pi-web" && await probeDesktopService(preferredPort)) {
     log(`端口 ${preferredPort} 已有 PiPi Agent 桌面服务在运行，直接附着`);
     return { mode: "attached", port: preferredPort, pid: null };
   }
   const port = state === "free" ? preferredPort : await findFreePort();
-  if (state !== "free") log(`端口 ${preferredPort} 的服务不含桌面终端能力，改用 ${port}`);
+  if (state !== "free") log(`端口 ${preferredPort} 的服务不是当前桌面实例，改用 ${port}`);
 
   if (!fs.existsSync(path.join(repoPath, ".next"))) {
     throw new Error(`pi-web 尚未构建（缺少 .next 目录）。请在 ${repoPath} 运行 npm run build`);

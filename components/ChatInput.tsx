@@ -498,6 +498,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [mcpBusyName, setMcpBusyName] = useState<string | null>(null);
   const [voiceState, setVoiceState] = useState<"idle" | "recording" | "transcribing">("idle");
   const [voiceLevels, setVoiceLevels] = useState<number[]>([]);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => (
     draftKey ? draftImagesToAttachedImages(getDraft(draftKey)?.images) : []
   ));
@@ -981,25 +982,30 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       const data = await res.json().catch(() => ({})) as { text?: string };
       const text = (data.text ?? "").trim();
       if (!res.ok || !text) throw new Error("transcription failed");
-      if (action === "send") {
-        if (!isStreaming) {
-          clearInput();
-          onSend(text, attachedImages.length ? attachedImages : undefined);
-        }
+      if (voiceActionRef.current !== action) {
+        // 转写期间被后续操作（如取消）取代，丢弃结果
+      } else if (action === "send" && !isStreaming) {
+        clearInput();
+        onSend(text, attachedImagesRef.current.length ? attachedImagesRef.current : undefined);
       } else {
         const current = valueRef.current;
         const needsSpace = current.length > 0 && !current.endsWith(" ") && !current.endsWith("\n");
         insertSnippetAtCursor(`${needsSpace ? " " : ""}${text}`);
       }
     } catch {
-      // 转写失败回到 idle，用户可重试
+      // 转写失败：回到 idle 并提示，用户可重试
+      setVoiceError(t("chat.voiceError"));
     }
     setVoiceState("idle");
-  }, [cleanupVoiceCapture, insertSnippetAtCursor, isStreaming, onSend, attachedImages, clearInput]);
+  }, [cleanupVoiceCapture, insertSnippetAtCursor, isStreaming, onSend, clearInput, t]);
 
   const startVoice = useCallback(async () => {
     if (voiceState !== "idle" || isStreaming) return;
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
+    setVoiceError(null);
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setVoiceError(t("chat.voiceUnsupported"));
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       voiceStreamRef.current = stream;
@@ -1036,11 +1042,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       tick();
       setVoiceState("recording");
     } catch {
-      // 无麦克风权限或设备：保持 idle
+      // 无麦克风权限或设备：保持 idle 并提示
       cleanupVoiceCapture();
       setVoiceState("idle");
+      setVoiceError(t("chat.voiceUnsupported"));
     }
-  }, [voiceState, isStreaming, finishVoice, cleanupVoiceCapture]);
+  }, [voiceState, isStreaming, finishVoice, cleanupVoiceCapture, t]);
 
   const stopVoice = useCallback((action: "cancel" | "input" | "send") => {
     voiceActionRef.current = action;
@@ -1629,7 +1636,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (lvl === "auto" || !thinkingLevelMap) return lvl;
     return thinkingLevelMap[lvl] ?? lvl;
   })();
-  const toolPresetLabel = Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "default"))?.[0] ?? "default";
+  const toolPresetLabel = Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "full"))?.[0] ?? "full";
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -1804,6 +1811,26 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}
           >
             {compactError}
+          </div>
+        )}
+        {/* Voice input error */}
+        {voiceError && (
+          <div style={{
+            marginBottom: 8, padding: "5px 10px",
+            background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.3)",
+            borderRadius: 6, fontSize: 12, color: "#ef4444",
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+          }}>
+            <span>{voiceError}</span>
+            <button
+              onClick={() => setVoiceError(null)}
+              aria-label="dismiss"
+              style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 2, display: "flex" }}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" />
+              </svg>
+            </button>
           </div>
         )}
         {/* Image previews */}
@@ -2354,13 +2381,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         onClick={handleAtReference}
                       />
                     )}
-                    <MenuItemRow
-                      icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>}
-                      label={t("chat.skills")}
-                      trailing={CHEVRON_RIGHT}
-                      active={attachMenuView === "skills"}
-                      onClick={() => setAttachMenuView((view) => view === "skills" ? "root" : "skills")}
-                    />
+                    {cwd && (
+                      <MenuItemRow
+                        icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>}
+                        label={t("chat.skills")}
+                        trailing={CHEVRON_RIGHT}
+                        active={attachMenuView === "skills"}
+                        onClick={() => setAttachMenuView((view) => view === "skills" ? "root" : "skills")}
+                      />
+                    )}
                   </div>
                   {attachMenuView === "skills" && (
                     <div style={{ ...MENU_PANEL_STYLE, left: "calc(100% + 8px)", bottom: 0, top: "auto" }}>
@@ -2451,7 +2480,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       <div style={{ padding: 4 }}>
                         {(["full", "off", "read-only", "default"] as const).map((lvl) => {
                           const preset = TOOL_PRESET_MAP[lvl];
-                          const isActive = (toolPreset ?? "default") === preset;
+                          const isActive = (toolPreset ?? "full") === preset;
                           let desc: string;
                           if (lvl === "off") desc = t("chat.noTools");
                           else if (lvl === "read-only") desc = t("chat.readOnlyTools", { count: 4 });

@@ -4,6 +4,7 @@ import { PwaRegistration } from "@/components/PwaRegistration";
 import "katex/dist/katex.min.css";
 import "@xterm/xterm/css/xterm.css";
 import "./globals.css";
+import "./settings.css";
 
 const notoSansMono = Noto_Sans_Mono({
   subsets: ["latin", "cyrillic"],

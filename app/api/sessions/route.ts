@@ -5,7 +5,11 @@ import {
   listAllSessions,
   mergeSessionLists,
 } from "@/lib/session-reader";
-import { getRpcSessionInfos, getRunningRpcSessionIds } from "@/lib/rpc-manager";
+import {
+  getCompletionNotificationSuppressedRpcSessionIds,
+  getRpcSessionInfos,
+  getRunningRpcSessionIds,
+} from "@/lib/rpc-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +38,12 @@ export async function GET(req: Request) {
     ]);
     const sessions = mergeSessionLists(persistedSessions, runtimeSessions);
     return NextResponse.json(
-      { sessions, runningSessionIds: getRunningRpcSessionIds(), ...listProjects(sessions) },
+      {
+        sessions,
+        runningSessionIds: getRunningRpcSessionIds(),
+        completionNotificationSuppressedSessionIds: getCompletionNotificationSuppressedRpcSessionIds(),
+        ...listProjects(sessions),
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
